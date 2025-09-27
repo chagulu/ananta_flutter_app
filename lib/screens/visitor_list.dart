@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart'; // for Clipboard
 import 'home_shell.dart'; // provides `api` and `baseUrl`
+import '../config.dart';
+
 
 class VisitorListPage extends StatefulWidget {
   const VisitorListPage({super.key});
@@ -28,7 +30,7 @@ class _VisitorListPageState extends State<VisitorListPage> {
     if (_loading) return;
     if (reset) {
       setState(() {
-        _page = 1;
+        _page = 0;
         _items.clear();
         _more = true;
         _error = null;
@@ -163,7 +165,7 @@ class _VisitorListPageState extends State<VisitorListPage> {
                 onPressed: token.isEmpty
                     ? null
                     : () async {
-                        final link = '$baseUrl/api/visitor/approve?token=$token';
+                        final link = '${AppConfig.baseUrl}/api/visitor/approve?token=$token';
                         await Clipboard.setData(ClipboardData(text: link));
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(

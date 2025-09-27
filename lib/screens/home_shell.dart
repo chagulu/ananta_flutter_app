@@ -8,7 +8,7 @@ import 'package:ananta_app/screens/visitor_qr.dart';
 import 'package:ananta_app/screens/visitor_manual_entry.dart';
 
 /// Central base URL (switch via dart-define if desired)
-const String baseUrl = 'https://fe058221ecde.ngrok-free.app';
+const String baseUrl = 'https://72b626729f79.ngrok-free.app';
 
 final _secure = const FlutterSecureStorage();
 

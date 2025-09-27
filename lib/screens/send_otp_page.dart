@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
-import 'package:ananta_app/screens/verify_otp_page.dart'; // adjust path/package
+import 'package:ananta_app/screens/verify_otp_page.dart';
+import '../config.dart';
+
+
+enum LoginType { user, residence }
 
 class SendOtpPage extends StatefulWidget {
   const SendOtpPage({super.key});
@@ -13,11 +17,13 @@ class _SendOtpPageState extends State<SendOtpPage> {
   final _formKey = GlobalKey<FormState>();
   final _mobileCtrl = TextEditingController();
   bool _submitting = false;
-  String? _banner; // success or error text
+  String? _banner;
   bool _isError = false;
+  LoginType _type = LoginType.user;
 
-  // Replace with ngrok/stage/prod
-  static const String baseUrl = 'http://10.0.2.2:8080'; 
+  // Emulator localhost -> host 8080
+  static const String baseUrl = AppConfig.baseUrl;
+
   late final Dio _dio;
 
   @override
@@ -37,6 +43,9 @@ class _SendOtpPageState extends State<SendOtpPage> {
     super.dispose();
   }
 
+  String get _sendPath => _type == LoginType.user ? '/auth/send-otp' : '/residence/auth/send-otp';
+  String get _verifyPath => _type == LoginType.user ? '/auth/verify-otp' : '/residence/auth/verify-otp';
+
   Future<void> _sendOtp() async {
     final ok = _formKey.currentState?.validate() ?? false;
     if (!ok) return;
@@ -49,7 +58,7 @@ class _SendOtpPageState extends State<SendOtpPage> {
 
     try {
       final payload = {"mobileNo": _mobileCtrl.text.trim()};
-      final res = await _dio.post('/auth/send-otp', data: payload);
+      final res = await _dio.post(_sendPath, data: payload);
       final data = res.data is Map ? res.data as Map : {};
       final success = data['success'] == true;
       final message = (data['message'] ?? 'OTP sent').toString();
@@ -58,6 +67,19 @@ class _SendOtpPageState extends State<SendOtpPage> {
         _banner = message;
         _isError = !success;
       });
+
+      if (success && mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => VerifyOtpPage(
+              mobileNo: _mobileCtrl.text.trim(),
+              baseUrl: baseUrl,
+              verifyPath: _verifyPath, // pass in path for this login type
+              loginType: _type,
+            ),
+          ),
+        );
+      }
     } on DioException catch (e) {
       final msg = e.response?.data is Map
           ? ((e.response?.data['message'] ?? 'Failed to send OTP').toString())
@@ -72,18 +94,9 @@ class _SendOtpPageState extends State<SendOtpPage> {
         _isError = true;
       });
     } finally {
-      // After success on /auth/send-otp
-if (mounted) {
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => VerifyOtpPage(
-        mobileNo: _mobileCtrl.text.trim(),
-        baseUrl: baseUrl, // reuse same base URL
-      ),
-    ),
-  );
-}
-
+      if (mounted) {
+        setState(() => _submitting = false);
+      }
     }
   }
 
@@ -93,6 +106,10 @@ if (mounted) {
 
     return Scaffold(
       backgroundColor: scheme.surface,
+      appBar: AppBar(
+        title: const Text('Login'),
+        backgroundColor: scheme.surface,
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480),
@@ -101,45 +118,22 @@ if (mounted) {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Logo and brand
-                Container(
-                  width: 88,
-                  height: 88,
-                  decoration: BoxDecoration(
-                    color: scheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: scheme.primary.withOpacity(0.15),
-                        blurRadius: 16,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    // Replace with Image.asset('assets/logo.png', fit: BoxFit.contain)
-                    child: Icon(Icons.shield, color: scheme.onPrimaryContainer, size: 44),
-                  ),
+                // Toggle row
+                SegmentedButton<LoginType>(
+                  segments: const [
+                    ButtonSegment(value: LoginType.user, label: Text('Guard')),
+                    ButtonSegment(value: LoginType.residence, label: Text('Residence')),
+                  ],
+                  selected: <LoginType>{_type},
+                  onSelectionChanged: (s) => setState(() => _type = s.first),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 Text(
-                  'Send OTP',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: scheme.onSurface,
-                      ),
+                  _type == LoginType.user ? 'Send OTP to user' : 'Send OTP to residence',
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Enter the mobile number to receive a one-time password.',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
 
-                // Banner
                 if (_banner != null)
                   Container(
                     width: double.infinity,
@@ -172,7 +166,6 @@ if (mounted) {
                     ),
                   ),
 
-                // Card form
                 Card(
                   color: scheme.surface,
                   elevation: 0,
@@ -257,11 +250,8 @@ if (mounted) {
 
                 const SizedBox(height: 16),
                 Text(
-                  'By continuing, a one-time password will be sent to the provided number.',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+                  'User endpoint: $_sendPath',
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
             ),

@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:ananta_app/screens/home_shell.dart'; // adjust path/package 
-// import your config to reuse baseUrl if you centralized it
-// import 'package:ananta_app/core/config/config.dart';
+import 'package:ananta_app/screens/home_shell.dart';
+
+import 'send_otp_page.dart' show LoginType;
 
 class VerifyOtpPage extends StatefulWidget {
   final String mobileNo;
   final String baseUrl;
-  const VerifyOtpPage({super.key, required this.mobileNo, required this.baseUrl});
+  final String verifyPath; // '/auth/verify-otp' or '/residence/auth/verify-otp'
+  final LoginType loginType;
+  const VerifyOtpPage({
+    super.key,
+    required this.mobileNo,
+    required this.baseUrl,
+    required this.verifyPath,
+    this.loginType = LoginType.user,
+  });
 
   @override
   State<VerifyOtpPage> createState() => _VerifyOtpPageState();
@@ -42,8 +50,7 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
   }
 
   Future<void> _verifyOtp() async {
-    final ok = _formKey.currentState?.validate() ?? false;
-    if (!ok) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
 
     setState(() {
       _submitting = true;
@@ -52,19 +59,14 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
     });
 
     try {
-      final payload = {
-        "mobileNo": widget.mobileNo,
-        "otp": _otpCtrl.text.trim(),
-      };
-
-      final res = await _dio.post('/auth/verify-otp', data: payload);
+      final payload = {"mobileNo": widget.mobileNo, "otp": _otpCtrl.text.trim()};
+      final res = await _dio.post(widget.verifyPath, data: payload);
       final data = res.data is Map ? res.data as Map : {};
       final success = data['success'] == true;
       final token = data['token']?.toString();
 
       if (success && token != null && token.isNotEmpty) {
         await _secure.write(key: 'access_token', value: token);
-        // Navigate to the next screen after saving token
         if (!mounted) return;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const HomeShell()),
@@ -89,11 +91,7 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
         _isError = true;
       });
     } finally {
-      if (mounted) {
-        setState(() {
-          _submitting = false;
-        });
-      }
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
@@ -102,126 +100,63 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: scheme.surface,
-      appBar: AppBar(
-        title: const Text('Verify OTP'),
-        backgroundColor: scheme.surface,
-      ),
+      appBar: AppBar(title: const Text('Verify OTP'), backgroundColor: scheme.surface),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            padding: const EdgeInsets.all(20),
             child: Column(
               children: [
                 if (_banner != null)
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    padding: const EdgeInsets.all(12),
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
                       color: _isError ? scheme.errorContainer : scheme.primaryContainer,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: _isError ? scheme.error : scheme.primary,
-                        width: 1,
-                      ),
                     ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _isError ? Icons.error_outline : Icons.check_circle_outline,
-                          color: _isError ? scheme.onErrorContainer : scheme.onPrimaryContainer,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _banner!,
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: _isError ? scheme.onErrorContainer : scheme.onPrimaryContainer,
-                                ),
+                    child: Text(
+                      _banner!,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: _isError ? scheme.onErrorContainer : scheme.onPrimaryContainer,
                           ),
-                        ),
-                      ],
                     ),
                   ),
-                Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(color: scheme.outlineVariant),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        children: [
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Enter OTP sent to ${widget.mobileNo}',
-                              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                    color: scheme.onSurface,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _otpCtrl,
-                            keyboardType: TextInputType.number,
-                            textInputAction: TextInputAction.done,
-                            maxLength: 6,
-                            decoration: InputDecoration(
-                              prefixIcon: Icon(Icons.lock_outline, color: scheme.onSurfaceVariant),
-                              hintText: '6-digit OTP',
-                              counterText: '',
-                              filled: true,
-                              fillColor: scheme.surfaceContainerHighest.withOpacity(0.5),
-                              enabledBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: scheme.outlineVariant),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: scheme.primary, width: 1.5),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              errorBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: scheme.error),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            validator: (v) {
-                              final s = (v ?? '').trim();
-                              if (s.isEmpty) return 'OTP is required';
-                              if (!RegExp(r'^\d{6}$').hasMatch(s)) return 'Enter a valid 6-digit OTP';
-                              return null;
-                            },
-                            onFieldSubmitted: (_) => _verifyOtp(),
-                          ),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 48,
-                            child: FilledButton.icon(
-                              icon: _submitting
-                                  ? SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        color: scheme.onPrimary,
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.verified),
-                              label: Text(_submitting ? 'Verifying...' : 'Verify OTP'),
-                              onPressed: _submitting ? null : _verifyOtp,
-                            ),
-                          ),
-                        ],
+                Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      Text('Enter OTP sent to ${widget.mobileNo}'),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _otpCtrl,
+                        keyboardType: TextInputType.number,
+                        maxLength: 6,
+                        decoration: const InputDecoration(hintText: '6-digit OTP', counterText: ''),
+                        validator: (v) {
+                          final s = (v ?? '').trim();
+                          if (s.isEmpty) return 'OTP is required';
+                          if (!RegExp(r'^\d{6}$').hasMatch(s)) return 'Enter a valid 6-digit OTP';
+                          return null;
+                        },
+                        onFieldSubmitted: (_) => _verifyOtp(),
                       ),
-                    ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: FilledButton.icon(
+                          icon: _submitting
+                              ? const SizedBox(
+                                  height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.verified),
+                          label: Text(_submitting ? 'Verifying...' : 'Verify OTP'),
+                          onPressed: _submitting ? null : _verifyOtp,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -229,17 +164,6 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
           ),
         ),
       ),
-    );
-  }
-}
-
-// Minimal placeholder for next screen
-class HomePage extends StatelessWidget {
-  const HomePage({super.key});
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(child: Text('Welcome', style: Theme.of(context).textTheme.headlineMedium)),
     );
   }
 }

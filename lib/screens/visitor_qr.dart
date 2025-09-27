@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'home_shell.dart' show api; // ensures the shared Dio with interceptor is available
-import '../config.dart';
+
 
 class GenerateQrPage extends StatefulWidget {
   const GenerateQrPage({super.key});

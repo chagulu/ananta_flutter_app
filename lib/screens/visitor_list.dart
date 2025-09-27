@@ -1,24 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/services.dart'; // for Clipboard
-import 'home_shell.dart'; // provides `api` and `baseUrl`
+import 'package:flutter/services.dart';
 import '../config.dart';
-
+import '../models/login_type.dart';
+import 'home_shell.dart'; // api and baseUrl
 
 class VisitorListPage extends StatefulWidget {
-  const VisitorListPage({super.key});
+  final LoginType loginType;
+  const VisitorListPage({super.key, this.loginType = LoginType.user});
 
   @override
   State<VisitorListPage> createState() => _VisitorListPageState();
 }
 
 class _VisitorListPageState extends State<VisitorListPage> {
-  int _page = 1;
+  int _page = 0;
   final int _size = 10;
   bool _loading = false;
   bool _more = true;
   String? _error;
   final List<Map<String, dynamic>> _items = [];
+
+  String get _endpoint {
+    return widget.loginType == LoginType.user
+        ? '/api/visitor/guard'
+        : '/api/visitor';
+  }
 
   @override
   void initState() {
@@ -36,18 +43,21 @@ class _VisitorListPageState extends State<VisitorListPage> {
         _error = null;
       });
     }
+
     setState(() {
       _loading = true;
       _error = null;
     });
+
     try {
       final res = await api.get(
-        '/api/visitor',
+        _endpoint,
         queryParameters: {'page': _page, 'size': _size},
       );
+
       final body = res.data is Map ? (res.data as Map) : <String, dynamic>{};
-      final visitorsAny = body['visitors'];
-      final totalPages = (body['totalPages'] ?? 1) as int;
+      final visitorsAny = body['data']; // <-- changed from 'visitors' to 'data'
+      final totalPages = body['pagination']?['totalPages'] ?? 1;
 
       final visitors = visitorsAny is List
           ? visitorsAny.map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map)).toList()
@@ -55,19 +65,17 @@ class _VisitorListPageState extends State<VisitorListPage> {
 
       setState(() {
         _items.addAll(visitors);
-        _more = _page < totalPages;
+        _more = _page < totalPages - 1;
       });
     } on DioException catch (e) {
-      if (!mounted) return;
       final msg = e.response?.data is Map
           ? ((e.response?.data['message'] ?? 'Failed to load visitors').toString())
           : (e.message ?? 'Failed to load visitors');
       setState(() => _error = msg);
     } catch (_) {
-      if (!mounted) return;
       setState(() => _error = 'Failed to load visitors');
     } finally {
-      if (mounted) setState(() => _loading = false);
+      setState(() => _loading = false);
     }
   }
 
@@ -125,7 +133,6 @@ class _VisitorListPageState extends State<VisitorListPage> {
         separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (context, index) {
           if (index >= _items.length) {
-            // Trigger next page load
             _loadMore();
             return const Center(
               child: Padding(
@@ -134,6 +141,7 @@ class _VisitorListPageState extends State<VisitorListPage> {
               ),
             );
           }
+
           final v = _items[index];
           final guestName = (v['guestName'] ?? '').toString();
           final mobile = (v['mobile'] ?? '').toString();

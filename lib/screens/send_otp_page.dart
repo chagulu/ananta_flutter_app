@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:ananta_app/screens/verify_otp_page.dart';
 import '../config.dart';
+import '../models/login_type.dart';
 
 
-enum LoginType { user, residence }
+
 
 class SendOtpPage extends StatefulWidget {
   const SendOtpPage({super.key});

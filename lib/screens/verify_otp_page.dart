@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:ananta_app/screens/home_shell.dart';
+import '../models/login_type.dart';
 
-import 'send_otp_page.dart' show LoginType;
 
 class VerifyOtpPage extends StatefulWidget {
   final String mobileNo;
@@ -69,7 +69,9 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
         await _secure.write(key: 'access_token', value: token);
         if (!mounted) return;
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeShell()),
+          MaterialPageRoute(
+        builder: (_) => HomeShell(loginType: widget.loginType),
+      ),
         );
       } else {
         setState(() {

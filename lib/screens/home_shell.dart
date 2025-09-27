@@ -1,18 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
-// Real pages (no stubs here)
 import 'package:ananta_app/screens/visitor_list.dart';
 import 'package:ananta_app/screens/visitor_qr.dart';
 import 'package:ananta_app/screens/visitor_manual_entry.dart';
 import '../config.dart';
+import '../models/login_type.dart';
 
-/// Central base URL (switch via dart-define if desired)
-/// Central base URL (switch via dart-define if desired)
+
+
 const String baseUrl = AppConfig.baseUrl;
-
-
 final _secure = const FlutterSecureStorage();
 
 class AuthInterceptor extends Interceptor {
@@ -26,7 +23,6 @@ class AuthInterceptor extends Interceptor {
   }
 }
 
-/// Shared Dio for the whole shell
 final Dio api = Dio(
   BaseOptions(
     baseUrl: baseUrl,
@@ -37,7 +33,9 @@ final Dio api = Dio(
 )..interceptors.add(AuthInterceptor());
 
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key});
+  final LoginType loginType;
+  const HomeShell({super.key, required this.loginType});
+
   @override
   State<HomeShell> createState() => _HomeShellState();
 }
@@ -45,12 +43,17 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
-  // Only imported real pages here
-  final List<Widget> _pages = const [
-    VisitorListPage(),
-    GenerateQrPage(),
-    ManualEntryPage(),
-  ];
+  late final List<Widget> _pages;
+
+  @override
+  void initState() {
+    super.initState();
+    _pages = [
+      VisitorListPage(loginType: widget.loginType),
+      const GenerateQrPage(),
+      const ManualEntryPage(),
+    ];
+  }
 
   void _onMenuSelected(String value) async {
     switch (value) {

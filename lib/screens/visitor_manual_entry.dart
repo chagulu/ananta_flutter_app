@@ -16,35 +16,44 @@ class _ManualEntryPageState extends State<ManualEntryPage> {
   final _form = GlobalKey<FormState>();
   final _guestCtrl = TextEditingController();
   final _mobileCtrl = TextEditingController();
-  final _flatCtrl = TextEditingController();
-  final _bldgCtrl = TextEditingController();
   final _purposeCtrl = TextEditingController();
   final _vehicleCtrl = TextEditingController();
   bool _submitting = false;
+
+  // Dropdown state
+  String? _selectedFlat;
+  String? _selectedBuilding;
+
+  // Static options as requested
+  static const List<String> kFlatOptions = <String>[
+    'A1','A2','B1','B2','C1','C2','D1','D2','E1','E2',
+  ];
+
+  static const List<String> kBuildingOptions = <String>[
+    'A1','A2','A3','A4','A5','A6','A7','A8',
+  ];
 
   @override
   void dispose() {
     _guestCtrl.dispose();
     _mobileCtrl.dispose();
-    _flatCtrl.dispose();
-    _bldgCtrl.dispose();
     _purposeCtrl.dispose();
     _vehicleCtrl.dispose();
     super.dispose();
   }
 
   Map<String, dynamic> _buildPayload() {
-    final flat = _flatCtrl.text.trim();
-    final bldg = _bldgCtrl.text.trim();
-    final purpose = _purposeCtrl.text.trim();
-    final vehicle = _vehicleCtrl.text.trim();
     return {
       "guestName": _guestCtrl.text.trim(),
       "mobile": _mobileCtrl.text.trim(),
-      if (flat.isNotEmpty) "flatNumber": flat,
-      if (bldg.isNotEmpty) "buildingNumber": bldg,
-      if (purpose.isNotEmpty) "visitPurpose": purpose,
-      if (vehicle.isNotEmpty) "vehicleDetails": vehicle,
+      if (_selectedFlat != null && _selectedFlat!.isNotEmpty)
+        "flatNumber": _selectedFlat,
+      if (_selectedBuilding != null && _selectedBuilding!.isNotEmpty)
+        "buildingNumber": _selectedBuilding,
+      if (_purposeCtrl.text.trim().isNotEmpty)
+        "visitPurpose": _purposeCtrl.text.trim(),
+      if (_vehicleCtrl.text.trim().isNotEmpty)
+        "vehicleDetails": _vehicleCtrl.text.trim(),
     };
   }
 
@@ -77,7 +86,8 @@ class _ManualEntryPageState extends State<ManualEntryPage> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Failed')));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -100,7 +110,7 @@ class _ManualEntryPageState extends State<ManualEntryPage> {
             key: _form,
             child: Column(
               children: [
-                _field(
+                _textField(
                   'Guest name',
                   _guestCtrl,
                   Icons.person_outline,
@@ -112,7 +122,7 @@ class _ManualEntryPageState extends State<ManualEntryPage> {
                     return null;
                   },
                 ),
-                _field(
+                _textField(
                   'Mobile (10 digits)',
                   _mobileCtrl,
                   Icons.phone_outlined,
@@ -125,10 +135,45 @@ class _ManualEntryPageState extends State<ManualEntryPage> {
                     return null;
                   },
                 ),
-                _field('Flat number', _flatCtrl, Icons.home_outlined, textInputAction: TextInputAction.next),
-                _field('Building number', _bldgCtrl, Icons.domain_outlined, textInputAction: TextInputAction.next),
-                _field('Visit purpose', _purposeCtrl, Icons.event_note_outlined, textInputAction: TextInputAction.next),
-                _field('Vehicle details', _vehicleCtrl, Icons.directions_car_outlined, textInputAction: TextInputAction.done),
+
+                // Flat number dropdown
+                _dropdownField<String>(
+                  label: 'Flat number',
+                  icon: Icons.home_outlined,
+                  value: _selectedFlat,
+                  items: kFlatOptions,
+                  onChanged: (val) => setState(() => _selectedFlat = val),
+                  validator: (val) {
+                    // Make selection optional; set to Required if needed
+                    return null;
+                  },
+                ),
+
+                // Building number dropdown
+                _dropdownField<String>(
+                  label: 'Building number',
+                  icon: Icons.domain_outlined,
+                  value: _selectedBuilding,
+                  items: kBuildingOptions,
+                  onChanged: (val) => setState(() => _selectedBuilding = val),
+                  validator: (val) {
+                    // Make selection optional; set to Required if needed
+                    return null;
+                  },
+                ),
+
+                _textField(
+                  'Visit purpose',
+                  _purposeCtrl,
+                  Icons.event_note_outlined,
+                  textInputAction: TextInputAction.next,
+                ),
+                _textField(
+                  'Vehicle details',
+                  _vehicleCtrl,
+                  Icons.directions_car_outlined,
+                  textInputAction: TextInputAction.done,
+                ),
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
@@ -138,7 +183,10 @@ class _ManualEntryPageState extends State<ManualEntryPage> {
                         ? SizedBox(
                             height: 20,
                             width: 20,
-                            child: CircularProgressIndicator(color: scheme.onPrimary, strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              color: scheme.onPrimary,
+                              strokeWidth: 2,
+                            ),
                           )
                         : const Icon(Icons.save),
                     label: Text(_submitting ? 'Submitting...' : 'Create entry'),
@@ -153,7 +201,7 @@ class _ManualEntryPageState extends State<ManualEntryPage> {
     );
   }
 
-  Widget _field(
+  Widget _textField(
     String label,
     TextEditingController c,
     IconData icon, {
@@ -187,6 +235,52 @@ class _ManualEntryPageState extends State<ManualEntryPage> {
           ),
         ),
         validator: validator,
+      ),
+    );
+  }
+
+  Widget _dropdownField<T>({
+    required String label,
+    required IconData icon,
+    required T? value,
+    required List<T> items,
+    required void Function(T?) onChanged,
+    String? Function(T?)? validator,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: DropdownButtonFormField<T>(
+        value: value,
+        isExpanded: true,
+        items: items
+            .map((e) => DropdownMenuItem<T>(
+                  value: e,
+                  child: Text(e.toString()),
+                ))
+            .toList(),
+        onChanged: onChanged,
+        validator: validator,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon, color: scheme.onSurfaceVariant),
+          filled: true,
+          fillColor: scheme.surfaceContainerHighest.withOpacity(0.5),
+          enabledBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: scheme.outlineVariant),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: scheme.primary, width: 1.5),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: scheme.error, width: 1.5),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        ),
+        icon: const Icon(Icons.keyboard_arrow_down),
       ),
     );
   }

@@ -20,7 +20,7 @@ class _SendOtpPageState extends State<SendOtpPage> {
   bool _submitting = false;
   String? _banner;
   bool _isError = false;
-  LoginType _type = LoginType.user;
+  LoginType _type = LoginType.guard;
 
   // Emulator localhost -> host 8080
   static const String baseUrl = AppConfig.baseUrl;
@@ -44,8 +44,8 @@ class _SendOtpPageState extends State<SendOtpPage> {
     super.dispose();
   }
 
-  String get _sendPath => _type == LoginType.user ? '/auth/send-otp' : '/residence/auth/send-otp';
-  String get _verifyPath => _type == LoginType.user ? '/auth/verify-otp' : '/residence/auth/verify-otp';
+  String get _sendPath => _type == LoginType.guard ? '/guard/auth/send-otp' : '/residence/auth/send-otp';
+  String get _verifyPath => _type == LoginType.guard ? '/guard/auth/verify-otp' : '/residence/auth/verify-otp';
 
   Future<void> _sendOtp() async {
     final ok = _formKey.currentState?.validate() ?? false;
@@ -122,7 +122,7 @@ class _SendOtpPageState extends State<SendOtpPage> {
                 // Toggle row
                 SegmentedButton<LoginType>(
                   segments: const [
-                    ButtonSegment(value: LoginType.user, label: Text('Guard')),
+                    ButtonSegment(value: LoginType.guard, label: Text('Guard')),
                     ButtonSegment(value: LoginType.residence, label: Text('Residence')),
                   ],
                   selected: <LoginType>{_type},
@@ -130,7 +130,7 @@ class _SendOtpPageState extends State<SendOtpPage> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  _type == LoginType.user ? 'Send OTP to user' : 'Send OTP to residence',
+                  _type == LoginType.guard ? 'Send OTP to user' : 'Send OTP to residence',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 16),

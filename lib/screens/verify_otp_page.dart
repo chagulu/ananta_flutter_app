@@ -4,7 +4,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:ananta_app/screens/home_shell.dart';
 import '../models/login_type.dart';
 
-
 class VerifyOtpPage extends StatefulWidget {
   final String mobileNo;
   final String baseUrl;
@@ -15,7 +14,7 @@ class VerifyOtpPage extends StatefulWidget {
     required this.mobileNo,
     required this.baseUrl,
     required this.verifyPath,
-    this.loginType = LoginType.user,
+    this.loginType = LoginType.guard,
   });
 
   @override
@@ -64,14 +63,23 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
       final data = res.data is Map ? res.data as Map : {};
       final success = data['success'] == true;
       final token = data['token']?.toString();
+      final role = data['role']?.toString(); // 👈 extract role from response
 
       if (success && token != null && token.isNotEmpty) {
         await _secure.write(key: 'access_token', value: token);
+
+        if (role != null && role.isNotEmpty) {
+          await _secure.write(key: 'user_role', value: role); // 👈 store role
+        }
+
         if (!mounted) return;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-        builder: (_) => HomeShell(loginType: widget.loginType),
-      ),
+            builder: (_) => HomeShell(
+              loginType: widget.loginType,
+              role: role ?? 'ROLE_RESIDENCE', // 👈 pass role to HomeShell
+            ),
+          ),
         );
       } else {
         setState(() {

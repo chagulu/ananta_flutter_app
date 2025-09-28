@@ -1,2 +1,2 @@
 // lib/models/login_type.dart
-enum LoginType { user, residence }
+enum LoginType { guard, residence }

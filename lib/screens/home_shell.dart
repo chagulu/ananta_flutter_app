@@ -7,10 +7,8 @@ import 'package:ananta_app/screens/visitor_manual_entry.dart';
 import '../config.dart';
 import '../models/login_type.dart';
 
-
-
 const String baseUrl = AppConfig.baseUrl;
-final _secure = const FlutterSecureStorage();
+final _secure = FlutterSecureStorage();
 
 class AuthInterceptor extends Interceptor {
   @override
@@ -34,7 +32,8 @@ final Dio api = Dio(
 
 class HomeShell extends StatefulWidget {
   final LoginType loginType;
-  const HomeShell({super.key, required this.loginType});
+  final String role; // pass role from OTP verification
+  const HomeShell({super.key, required this.loginType, required this.role});
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -42,29 +41,73 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
-
-  late final List<Widget> _pages;
+  late List<Widget> _pages;
+  late List<NavigationDestination> _destinations;
 
   @override
   void initState() {
     super.initState();
-    _pages = [
-      VisitorListPage(loginType: widget.loginType),
-      const GenerateQrPage(),
-      const ManualEntryPage(),
-    ];
+    _setupMenu();
+  }
+
+  void _setupMenu() {
+    if (widget.role == 'ROLE_GUARD') {
+      _pages = [
+        VisitorListPage(loginType: widget.loginType),
+        const GenerateQrPage(),
+        const ManualEntryPage(),
+      ];
+      _destinations = const [
+        NavigationDestination(
+          icon: Icon(Icons.apartment_outlined),
+          selectedIcon: Icon(Icons.apartment),
+          label: 'Residence list',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.qr_code_2_outlined),
+          selectedIcon: Icon(Icons.qr_code_2),
+          label: 'Generate QR',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.playlist_add_outlined),
+          selectedIcon: Icon(Icons.playlist_add),
+          label: 'Manual entry',
+        ),
+      ];
+    } else {
+      // Residence role
+      _pages = [
+        VisitorListPage(loginType: widget.loginType),
+        const SizedBox.shrink(), // dummy page to satisfy NavigationBar
+      ];
+      _destinations = const [
+        NavigationDestination(
+          icon: Icon(Icons.apartment_outlined),
+          selectedIcon: Icon(Icons.apartment),
+          label: 'Residence list',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.info_outline),
+          selectedIcon: Icon(Icons.info),
+          label: '',
+        ),
+      ];
+    }
   }
 
   void _onMenuSelected(String value) async {
     switch (value) {
       case 'profile':
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile coming soon')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Profile coming soon')));
         break;
       case 'settings':
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings coming soon')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Settings coming soon')));
         break;
       case 'logout':
         await _secure.delete(key: 'access_token');
+        await _secure.delete(key: 'user_role');
         if (!mounted) return;
         Navigator.of(context).popUntil((r) => r.isFirst);
         break;
@@ -97,23 +140,7 @@ class _HomeShellState extends State<HomeShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.apartment_outlined),
-            selectedIcon: Icon(Icons.apartment),
-            label: 'Residence list',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.qr_code_2_outlined),
-            selectedIcon: Icon(Icons.qr_code_2),
-            label: 'Generate QR',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.playlist_add_outlined),
-            selectedIcon: Icon(Icons.playlist_add),
-            label: 'Manual entry',
-          ),
-        ],
+        destinations: _destinations,
       ),
     );
   }

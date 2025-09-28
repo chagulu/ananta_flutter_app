@@ -2,5 +2,5 @@
 class AppConfig {
   // Falls back to the hardcoded default if not provided at build/run time
   static const String baseUrl =
-      String.fromEnvironment('BASE_URL', defaultValue: 'https://0e86bdac56eb.ngrok-free.app');
+      String.fromEnvironment('BASE_URL', defaultValue: 'https://082088cc4b51.ngrok-free.app');
 }

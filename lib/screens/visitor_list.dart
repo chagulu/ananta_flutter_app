@@ -7,7 +7,7 @@ import 'home_shell.dart'; // api and baseUrl
 
 class VisitorListPage extends StatefulWidget {
   final LoginType loginType;
-  const VisitorListPage({super.key, this.loginType = LoginType.user});
+  const VisitorListPage({super.key, this.loginType = LoginType.guard});
 
   @override
   State<VisitorListPage> createState() => _VisitorListPageState();
@@ -22,7 +22,7 @@ class _VisitorListPageState extends State<VisitorListPage> {
   final List<Map<String, dynamic>> _items = [];
 
   String get _endpoint {
-    return widget.loginType == LoginType.user
+    return widget.loginType == LoginType.guard
         ? '/api/visitor/guard'
         : '/api/visitor';
   }

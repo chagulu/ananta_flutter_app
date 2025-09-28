@@ -56,16 +56,20 @@ class _VisitorListPageState extends State<VisitorListPage> {
       );
 
       final body = res.data is Map ? (res.data as Map) : <String, dynamic>{};
-      final visitorsAny = body['data']; // <-- changed from 'visitors' to 'data'
-      final totalPages = body['pagination']?['totalPages'] ?? 1;
+      final visitorsAny = body['data'];
+      final totalPages = (body['pagination']?['totalPages'] ?? 1) as int;
 
       final visitors = visitorsAny is List
-          ? visitorsAny.map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map)).toList()
+          ? visitorsAny
+              .map<Map<String, dynamic>>(
+                (e) => Map<String, dynamic>.from(e as Map),
+              )
+              .toList()
           : <Map<String, dynamic>>[];
 
       setState(() {
         _items.addAll(visitors);
-        _more = _page < totalPages - 1;
+        _more = _page < (totalPages - 1);
       });
     } on DioException catch (e) {
       final msg = e.response?.data is Map
@@ -83,6 +87,60 @@ class _VisitorListPageState extends State<VisitorListPage> {
     if (!_more || _loading) return;
     setState(() => _page += 1);
     await _fetch();
+  }
+
+  // Status color mapping per requirement:
+  // Approved = Green, Pending = Yellow/Orange, Rejected = Red.
+  Color _statusColor(String status) {
+    switch (status.toUpperCase()) {
+      case 'APPROVED':
+        return Colors.green;
+      case 'PENDING':
+        return Colors.orange; // or Colors.amber
+      case 'REJECTED':
+      default:
+        return Colors.red;
+    }
+  }
+
+  // Card background tint for non-pending states.
+  Color? _cardTint(String status) {
+    switch (status.toUpperCase()) {
+      case 'APPROVED':
+        return Colors.green.withOpacity(0.06);
+      case 'REJECTED':
+        return Colors.red.withOpacity(0.06);
+      case 'PENDING':
+      default:
+        return null; // neutral for pending
+    }
+  }
+
+  String _statusLabel(String status) {
+    final s = status.toUpperCase();
+    if (s == 'APPROVED' || s == 'PENDING' || s == 'REJECTED') return s;
+    return status;
+  }
+
+  Future<void> _approve(String token) async {
+    // Implement the approve API call; adjust path/method as per backend
+    try {
+      await api.post('/api/visitor/approve', queryParameters: {'token': token});
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Approved successfully')));
+      await _fetch(reset: true);
+    } on DioException catch (e) {
+      final msg = e.response?.data is Map
+          ? ((e.response?.data['message'] ?? 'Approve failed').toString())
+          : (e.message ?? 'Approve failed');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Approve failed')));
+    }
   }
 
   @override
@@ -152,7 +210,13 @@ class _VisitorListPageState extends State<VisitorListPage> {
           final time = (v['visitTime'] ?? '-').toString();
           final token = (v['token'] ?? '').toString();
 
+          final color = _statusColor(status);
+          final tint = _cardTint(status);
+          final label = _statusLabel(status);
+          final isPending = status.toUpperCase() == 'PENDING';
+
           return Card(
+            color: tint,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
               side: BorderSide(color: scheme.outlineVariant),
@@ -160,11 +224,43 @@ class _VisitorListPageState extends State<VisitorListPage> {
             child: ListTile(
               leading: const Icon(Icons.person_outline),
               title: Text('$guestName • $mobile'),
-              subtitle: Text(
-                'Flat $flat, Bldg $bldg\n'
-                'Purpose: $purpose\n'
-                'Status: $status\n'
-                'Time: $time',
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Flat $flat, Bldg $bldg'),
+                  Text('Purpose: $purpose'),
+                  Text('Time: $time'),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Chip(
+                        label: Text(label),
+                        backgroundColor: color.withOpacity(0.15),
+                        labelStyle: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        side: BorderSide(color: color),
+                        visualDensity: VisualDensity.compact,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      const SizedBox(width: 8),
+                      if (isPending)
+                        FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                          ),
+                          onPressed: token.isEmpty ? null : () => _approve(token),
+                          icon: const Icon(Icons.check_circle_outline, size: 18),
+                          label: const Text('Approve'),
+                        ),
+                    ],
+                  ),
+                ],
               ),
               isThreeLine: true,
               trailing: IconButton(
@@ -173,7 +269,8 @@ class _VisitorListPageState extends State<VisitorListPage> {
                 onPressed: token.isEmpty
                     ? null
                     : () async {
-                        final link = '${AppConfig.baseUrl}/api/visitor/approve?token=$token';
+                        final link =
+                            '${AppConfig.baseUrl}/api/visitor/approve?token=$token';
                         await Clipboard.setData(ClipboardData(text: link));
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(

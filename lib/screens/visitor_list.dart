@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import '../config.dart';
 import '../models/login_type.dart';
 import 'home_shell.dart'; // api and baseUrl
@@ -142,6 +143,17 @@ class _VisitorListPageState extends State<VisitorListPage> {
     }
   }
 
+  /// ✅ Convert UTC visitTime to IST
+  String formatToIST(String utcTime) {
+    try {
+      final dateTime = DateTime.parse(utcTime).toUtc();
+      final istTime = dateTime.add(const Duration(hours: 5, minutes: 30));
+      return DateFormat('dd MMM yyyy, hh:mm a').format(istTime);
+    } catch (_) {
+      return utcTime;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -207,7 +219,9 @@ class _VisitorListPageState extends State<VisitorListPage> {
           final bldg = (v['buildingNumber'] ?? '-').toString();
           final purpose = (v['visitPurpose'] ?? '-').toString();
           final status = (v['approveStatus'] ?? '-').toString();
-          final time = (v['visitTime'] ?? '-').toString();
+          final time = v['visitTime'] != null
+              ? formatToIST(v['visitTime'].toString())
+              : '-';
 
           final color = _statusColor(status);
           final tint = _cardTint(status);

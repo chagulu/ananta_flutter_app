@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import '../config.dart';
-import 'home_shell.dart'; // contains api and baseUrl
+import 'home_shell.dart'; // api and baseUrl
 
 class ResidenceListPage extends StatefulWidget {
   const ResidenceListPage({super.key});
@@ -21,8 +21,8 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _mobileController = TextEditingController();
-  final TextEditingController _flatController = TextEditingController();
-  final TextEditingController _buildingController = TextEditingController();
+  String? _selectedFlat;
+  String? _selectedBuilding;
 
   // Static options
   static const List<String> kFlatOptions = <String>[
@@ -44,8 +44,6 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
     _pollingTimer?.cancel();
     _nameController.dispose();
     _mobileController.dispose();
-    _flatController.dispose();
-    _buildingController.dispose();
     super.dispose();
   }
 
@@ -56,16 +54,6 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
 
   Future<void> _fetch({bool reset = false}) async {
     if (_loading) return;
-
-    // Validate Flat & Building
-    if ((_flatController.text.isNotEmpty && _buildingController.text.isEmpty) ||
-        (_flatController.text.isEmpty && _buildingController.text.isNotEmpty)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Both Flat and Building must be selected together')),
-      );
-      return;
-    }
-
     if (reset) {
       setState(() {
         _page = 0;
@@ -77,13 +65,21 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
     setState(() => _loading = true);
 
     try {
+      // Validate flat & building selection
+      if ((_selectedFlat != null && _selectedBuilding == null) || (_selectedFlat == null && _selectedBuilding != null)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Both Flat and Building must be selected together')),
+        );
+        return;
+      }
+
       final res = await api.get('/api/residences', queryParameters: {
         'page': _page,
         'size': _size,
-        'name': _nameController.text,
-        'mobileNo': _mobileController.text,
-        'flatNumber': _flatController.text,
-        'buildingNumber': _buildingController.text,
+        'name': _nameController.text.isEmpty ? null : _nameController.text,
+        'mobileNo': _mobileController.text.isEmpty ? null : _mobileController.text,
+        'flatNumber': _selectedFlat,
+        'buildingNumber': _selectedBuilding,
       });
 
       final content = res.data['content'] as List<dynamic>? ?? [];
@@ -94,9 +90,6 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
       });
     } on DioException catch (e) {
       debugPrint('Failed to fetch residences: ${e.message}');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to fetch residences: ${e.message}')),
-      );
     } finally {
       setState(() => _loading = false);
     }
@@ -106,6 +99,14 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
     if (!_more || _loading) return;
     setState(() => _page += 1);
     await _fetch();
+  }
+
+  void _clearFilters() {
+    _nameController.clear();
+    _mobileController.clear();
+    _selectedFlat = null;
+    _selectedBuilding = null;
+    _fetch(reset: true);
   }
 
   Widget _buildFilter() {
@@ -124,6 +125,7 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
               child: TextField(
                 controller: _mobileController,
                 decoration: const InputDecoration(labelText: 'Mobile No'),
+                keyboardType: TextInputType.phone,
               ),
             ),
           ],
@@ -133,32 +135,39 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
           children: [
             Expanded(
               child: DropdownButtonFormField<String>(
-                decoration: const InputDecoration(labelText: 'Building Number'),
-                value: _buildingController.text.isEmpty ? null : _buildingController.text,
-                items: kBuildingOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                onChanged: (val) {
-                  setState(() => _buildingController.text = val ?? '');
-                },
+                decoration: const InputDecoration(labelText: 'Flat Number'),
+                value: _selectedFlat,
+                items: kFlatOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                onChanged: (val) => setState(() => _selectedFlat = val),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: DropdownButtonFormField<String>(
-                decoration: const InputDecoration(labelText: 'Flat Number'),
-                value: _flatController.text.isEmpty ? null : _flatController.text,
-                items: kFlatOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                onChanged: (val) {
-                  setState(() => _flatController.text = val ?? '');
-                },
+                decoration: const InputDecoration(labelText: 'Building Number'),
+                value: _selectedBuilding,
+                items: kBuildingOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                onChanged: (val) => setState(() => _selectedBuilding = val),
               ),
             ),
           ],
         ),
         const SizedBox(height: 8),
-        ElevatedButton.icon(
-          onPressed: () => _fetch(reset: true),
-          icon: const Icon(Icons.search),
-          label: const Text('Apply Filters'),
+        Row(
+          children: [
+            ElevatedButton.icon(
+              onPressed: () => _fetch(reset: true),
+              icon: const Icon(Icons.search),
+              label: const Text('Apply Filters'),
+            ),
+            const SizedBox(width: 12),
+            ElevatedButton.icon(
+              onPressed: _clearFilters,
+              icon: const Icon(Icons.clear),
+              label: const Text('Clear Filters'),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
+            ),
+          ],
         ),
       ],
     );
@@ -173,8 +182,8 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
         children: [
           _buildFilter(),
           const SizedBox(height: 12),
-          if (_loading && _residences.isEmpty)
-            const Center(child: CircularProgressIndicator()),
+          if (_residences.isEmpty && !_loading)
+            const Center(child: Text('No residences found.')),
           ..._residences.map((res) {
             return Card(
               child: ListTile(
@@ -190,7 +199,7 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
               ),
             );
           }).toList(),
-          if (_more && !_loading)
+          if (_more)
             Center(
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),

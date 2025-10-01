@@ -10,17 +10,18 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  cupertino_icons: ^1.0.8
 
   # HTTP client for REST APIs
-  dio: ^5.9.0   # <- keep only one version
+  dio: ^5.9.0
 
   # Internationalization & date formatting
   intl: ^0.20.2
 
-  # Store tokens (e.g., guard JWT) securely
+  # Store tokens securely
   flutter_secure_storage: ^9.2.2
 
-  # QR scanner for guest flows (optional; remove if not needed)
+  # QR scanner for guest flows
   qr_code_scanner_plus: ^2.0.0
 
   # QR code generator for resident flows
@@ -30,5 +31,12 @@ dependencies:
   retrofit: ^4.0.3
   json_annotation: ^4.9.0
 
-  # Cupertino icons
-  cupertino_icons: ^1.0.8
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  build_runner: ^2.4.12
+  json_serializable: ^6.8.0
+
+flutter:
+  uses-material-design: true

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
-import '../config.dart';
 import 'home_shell.dart'; // api and baseUrl
 
 class ResidenceListPage extends StatefulWidget {
@@ -74,25 +73,22 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
             const SnackBar(content: Text('Both Flat and Building must be selected together')),
           );
         }
-        if (mounted) setState(() => _loading = false); // ensure loading is cleared
+        if (mounted) setState(() => _loading = false);
         return;
       }
 
-      // Build query map without nulls/empties
       final qp = <String, dynamic>{
         'page': _page,
         'size': _size,
       };
-      final name = _nameController.text.trim();
-      final mobile = _mobileController.text.trim();
-      if (name.isNotEmpty) qp['name'] = name;
-      if (mobile.isNotEmpty) qp['mobileNo'] = mobile;
-      if (_selectedFlat != null && _selectedFlat!.isNotEmpty) {
-        qp['flatNumber'] = _selectedFlat!;
+      if (_nameController.text.trim().isNotEmpty) {
+        qp['name'] = _nameController.text.trim();
       }
-      if (_selectedBuilding != null && _selectedBuilding!.isNotEmpty) {
-        qp['buildingNumber'] = _selectedBuilding!;
+      if (_mobileController.text.trim().isNotEmpty) {
+        qp['mobileNo'] = _mobileController.text.trim();
       }
+      if (_selectedFlat != null) qp['flatNumber'] = _selectedFlat;
+      if (_selectedBuilding != null) qp['buildingNumber'] = _selectedBuilding;
 
       final res = await api.get('/api/residences', queryParameters: qp);
 
@@ -127,72 +123,166 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
   }
 
   Widget _buildFilter() {
-    return Column(
-      children: [
-        Row(
+    return Card(
+      elevation: 4,
+      margin: const EdgeInsets.all(4),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
           children: [
-            Expanded(
-              child: TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Name'),
-                textInputAction: TextInputAction.next,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _nameController,
+                    decoration: InputDecoration(
+                      labelText: 'Name',
+                      prefixIcon: const Icon(Icons.person),
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _mobileController,
+                    decoration: InputDecoration(
+                      labelText: 'Mobile No',
+                      prefixIcon: const Icon(Icons.phone),
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    keyboardType: TextInputType.phone,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: _mobileController,
-                decoration: const InputDecoration(labelText: 'Mobile No'),
-                keyboardType: TextInputType.phone,
-                textInputAction: TextInputAction.done,
-              ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Flat Number',
+                      prefixIcon: const Icon(Icons.home),
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    value: _selectedFlat,
+                    items: kFlatOptions
+                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                        .toList(),
+                    onChanged: (val) => setState(() => _selectedFlat = val),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Building Number',
+                      prefixIcon: const Icon(Icons.apartment),
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    value: _selectedBuilding,
+                    items: kBuildingOptions
+                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                        .toList(),
+                    onChanged: (val) => setState(() => _selectedBuilding = val),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _loading ? null : () => _fetch(reset: true),
+                    icon: const Icon(Icons.search),
+                    label: const Text('Apply Filters'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _loading ? null : _clearFilters,
+                    icon: const Icon(Icons.clear),
+                    label: const Text('Clear Filters'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey.shade600,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        Row(
+      ),
+    );
+  }
+
+  Widget _buildResidenceCard(Map<String, dynamic> res) {
+    return Card(
+      elevation: 3,
+      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: Colors.blueAccent,
+          child: Text(
+            (res['name']?.toString().substring(0, 1) ?? '-').toUpperCase(),
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
+        title: Text(
+          res['name']?.toString() ?? '-',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                decoration: const InputDecoration(labelText: 'Flat Number'),
-                value: _selectedFlat,
-                items: kFlatOptions
-                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                    .toList(),
-                onChanged: (val) => setState(() => _selectedFlat = val),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                decoration: const InputDecoration(labelText: 'Building Number'),
-                value: _selectedBuilding,
-                items: kBuildingOptions
-                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                    .toList(),
-                onChanged: (val) => setState(() => _selectedBuilding = val),
-              ),
-            ),
+            const SizedBox(height: 4),
+            Row(children: [
+              const Icon(Icons.phone, size: 16, color: Colors.grey),
+              const SizedBox(width: 4),
+              Text(res['mobileNo']?.toString() ?? '-'),
+            ]),
+            const SizedBox(height: 2),
+            Row(children: [
+              const Icon(Icons.location_on, size: 16, color: Colors.grey),
+              const SizedBox(width: 4),
+              Expanded(child: Text(res['address']?.toString() ?? '-')),
+            ]),
+            const SizedBox(height: 2),
+            Row(children: [
+              const Icon(Icons.home_work, size: 16, color: Colors.grey),
+              const SizedBox(width: 4),
+              Text("Flat: ${res['flatNumber'] ?? '-'}, Bldg: ${res['buildingNumber'] ?? '-'}"),
+            ]),
           ],
         ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            ElevatedButton.icon(
-              onPressed: _loading ? null : () => _fetch(reset: true),
-              icon: const Icon(Icons.search),
-              label: const Text('Apply Filters'),
-            ),
-            const SizedBox(width: 12),
-            ElevatedButton.icon(
-              onPressed: _loading ? null : _clearFilters,
-              icon: const Icon(Icons.clear),
-              label: const Text('Clear Filters'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
-            ),
-          ],
-        ),
-      ],
+      ),
     );
   }
 
@@ -205,32 +295,31 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
         children: [
           _buildFilter(),
           const SizedBox(height: 12),
+          if (_loading && _residences.isEmpty)
+            const Center(child: CircularProgressIndicator()),
           if (_residences.isEmpty && !_loading)
             const Center(child: Text('No residences found.')),
-          ..._residences.map((res) {
-            return Card(
-              child: ListTile(
-                title: Text(res['name']?.toString() ?? '-'),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Mobile: ${res['mobileNo']?.toString() ?? '-'}'),
-                    Text('Address: ${res['address']?.toString() ?? '-'}'),
-                    Text('Flat: ${res['flatNumber']?.toString() ?? '-'}, Bldg: ${res['buildingNumber']?.toString() ?? '-'}'),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-          if (_more)
+          ..._residences.map(_buildResidenceCard).toList(),
+          if (_more && !_loading)
             Center(
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: ElevatedButton(
                   onPressed: _loadMore,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                   child: const Text('Load More'),
                 ),
               ),
+            ),
+          if (_loading && _residences.isNotEmpty)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
             ),
         ],
       ),

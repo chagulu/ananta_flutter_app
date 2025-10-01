@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:ananta_app/screens/residence_list_page.dart';
 import 'package:ananta_app/screens/visitor_list.dart';
 import 'package:ananta_app/screens/visitor_qr.dart';
 import 'package:ananta_app/screens/visitor_manual_entry.dart';
@@ -93,11 +94,11 @@ class _HomeShellState extends State<HomeShell> {
   void _setupMenu() {
     if (widget.role == 'ROLE_GUARD') {
       _pages = [
-        VisitorListPage(loginType: widget.loginType),
+        const ResidenceListPage(), // Added Residence List as first tab
         const GenerateQrPage(),
         const ManualEntryPage(),
       ];
-      _destinations = [
+      _destinations = const [
         NavigationDestination(
           icon: Icon(Icons.apartment_outlined),
           selectedIcon: Icon(Icons.apartment),
@@ -117,19 +118,19 @@ class _HomeShellState extends State<HomeShell> {
     } else {
       // Residence role
       _pages = [
-        VisitorListPage(loginType: widget.loginType),
-        const SizedBox.shrink(),
+        const ResidenceListPage(), // first tab is residence list
+        const VisitorListPage(loginType: LoginType.residence),
       ];
-      _destinations = [
+      _destinations = const [
         NavigationDestination(
           icon: Icon(Icons.apartment_outlined),
           selectedIcon: Icon(Icons.apartment),
           label: 'Residence list',
         ),
         NavigationDestination(
-          icon: Icon(Icons.info_outline),
-          selectedIcon: Icon(Icons.info),
-          label: 'Info',
+          icon: Icon(Icons.people_outline),
+          selectedIcon: Icon(Icons.people),
+          label: 'Visitors',
         ),
       ];
     }

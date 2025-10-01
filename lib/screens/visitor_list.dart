@@ -31,16 +31,16 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
   String? _filterBuilding;
   String? _filterStatus;
 
+  // Dropdown options for flats and buildings
+  final List<String> _flatNumbers = ['C1','C2','C3','C4']; 
+  final List<String> _buildingNumbers = ['B1','B2','B3','B4'];
+
   final TextEditingController _guestNameController = TextEditingController();
   final TextEditingController _mobileController = TextEditingController();
-  final TextEditingController _flatController = TextEditingController();
-  final TextEditingController _buildingController = TextEditingController();
 
-  String get _endpoint {
-    return widget.loginType == LoginType.guard
-        ? '/api/visitor/guard'
-        : '/api/visitor';
-  }
+  String get _endpoint => widget.loginType == LoginType.guard
+      ? '/api/visitor/guard'
+      : '/api/visitor';
 
   @override
   void initState() {
@@ -56,8 +56,6 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
     _pollingTimer?.cancel();
     _guestNameController.dispose();
     _mobileController.dispose();
-    _flatController.dispose();
-    _buildingController.dispose();
     super.dispose();
   }
 
@@ -86,10 +84,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
       });
     }
 
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    setState(() => _loading = true);
 
     try {
       final queryParams = {
@@ -109,11 +104,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
       final totalPages = (body['pagination']?['totalPages'] ?? 1) as int;
 
       final visitors = visitorsAny is List
-          ? visitorsAny
-              .map<Map<String, dynamic>>(
-                (e) => Map<String, dynamic>.from(e as Map),
-              )
-              .toList()
+          ? visitorsAny.map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map)).toList()
           : <Map<String, dynamic>>[];
 
       setState(() {
@@ -176,13 +167,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
         SnackBar(content: Text('${action[0].toUpperCase()}${action.substring(1)}d successfully')),
       );
       await _fetch(reset: true);
-    } on DioException catch (e) {
-      final msg = e.response?.data is Map
-          ? ((e.response?.data['message'] ?? '${action[0].toUpperCase()}${action.substring(1)} failed').toString())
-          : (e.message ?? '${action[0].toUpperCase()}${action.substring(1)} failed');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${action[0].toUpperCase()}${action.substring(1)} failed')),
@@ -227,22 +212,18 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
               onChanged: (v) => _filterMobile = v,
             ),
             const SizedBox(height: 8),
-            TextField(
-              controller: _flatController,
-              decoration: const InputDecoration(
-                labelText: 'Flat Number',
-                prefixIcon: Icon(Icons.home),
-              ),
-              onChanged: (v) => _filterFlat = v,
+            DropdownButtonFormField<String>(
+              value: _filterFlat,
+              decoration: const InputDecoration(labelText: 'Flat Number'),
+              items: _flatNumbers.map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
+              onChanged: (v) => setState(() => _filterFlat = v),
             ),
             const SizedBox(height: 8),
-            TextField(
-              controller: _buildingController,
-              decoration: const InputDecoration(
-                labelText: 'Building Number',
-                prefixIcon: Icon(Icons.apartment),
-              ),
-              onChanged: (v) => _filterBuilding = v,
+            DropdownButtonFormField<String>(
+              value: _filterBuilding,
+              decoration: const InputDecoration(labelText: 'Building Number'),
+              items: _buildingNumbers.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+              onChanged: (v) => setState(() => _filterBuilding = v),
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
@@ -263,8 +244,6 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
                   onPressed: () {
                     _guestNameController.clear();
                     _mobileController.clear();
-                    _flatController.clear();
-                    _buildingController.clear();
                     setState(() {
                       _filterGuestName = null;
                       _filterMobile = null;
@@ -292,12 +271,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
   Widget _buildVisitorItem(BuildContext context, int index) {
     if (index >= _items.length) {
       _loadMore();
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 16),
-          child: CircularProgressIndicator(),
-        ),
-      );
+      return const Center(child: Padding(padding: EdgeInsets.symmetric(vertical: 16), child: CircularProgressIndicator()));
     }
 
     final v = _items[index];
@@ -308,10 +282,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
     final bldg = (v['buildingNumber'] ?? '-').toString();
     final purpose = (v['visitPurpose'] ?? '-').toString();
     final status = (v['approveStatus'] ?? '-').toString();
-    final time = v['visitTime'] != null
-        ? formatToIST(v['visitTime'].toString())
-        : '-';
-
+    final time = v['visitTime'] != null ? formatToIST(v['visitTime'].toString()) : '-';
     final color = _statusColor(status);
     final tint = _cardTint(status);
     final label = _statusLabel(status);
@@ -319,9 +290,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
 
     return Card(
       color: tint,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
         leading: const Icon(Icons.person_outline),
         title: Text('$guestName • $mobile'),
@@ -346,24 +315,14 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
                   const SizedBox(width: 4),
                   if (isPending && widget.loginType == LoginType.residence) ...[
                     FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                      ),
+                      style: FilledButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, visualDensity: VisualDensity.compact, padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4)),
                       onPressed: id == 0 ? null : () => _visitorAction(id, 'approve'),
                       icon: const Icon(Icons.check_circle_outline, size: 14),
                       label: const Text('Approve', style: TextStyle(fontSize: 10)),
                     ),
                     const SizedBox(width: 2),
                     FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                      ),
+                      style: FilledButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, visualDensity: VisualDensity.compact, padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4)),
                       onPressed: id == 0 ? null : () => _visitorAction(id, 'reject'),
                       icon: const Icon(Icons.cancel_outlined, size: 14),
                       label: const Text('Reject', style: TextStyle(fontSize: 10)),
@@ -378,17 +337,12 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
         trailing: IconButton(
           icon: const Icon(Icons.copy),
           tooltip: 'Copy approval link',
-          onPressed: id == 0
-              ? null
-              : () async {
-                  final link =
-                      '${AppConfig.baseUrl}/api/visitor/$id/action?action=approve';
-                  await Clipboard.setData(ClipboardData(text: link));
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Approval link copied')),
-                  );
-                },
+          onPressed: id == 0 ? null : () async {
+            final link = '${AppConfig.baseUrl}/api/visitor/$id/action?action=approve';
+            await Clipboard.setData(ClipboardData(text: link));
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Approval link copied')));
+          },
         ),
       ),
     );
@@ -396,8 +350,6 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
     return Scaffold(
       appBar: AppBar(title: const Text('Visitors')),
       body: RefreshIndicator(
@@ -417,27 +369,17 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
                     children: [
                       Text(_error!, textAlign: TextAlign.center),
                       const SizedBox(height: 12),
-                      FilledButton.icon(
-                        onPressed: () => _fetch(reset: true),
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Retry'),
-                      ),
+                      FilledButton.icon(onPressed: () => _fetch(reset: true), icon: const Icon(Icons.refresh), label: const Text('Retry')),
                     ],
                   ),
                 ),
               )
             else if (_items.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 160),
-                child: Center(child: Text('No visitors yet')),
-              )
+              const Padding(padding: EdgeInsets.symmetric(vertical: 160), child: Center(child: Text('No visitors yet')))
             else
               ...List.generate(_items.length, (index) => _buildVisitorItem(context, index)),
             if (_more && _items.isNotEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Center(child: CircularProgressIndicator()),
-              ),
+              const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Center(child: CircularProgressIndicator())),
           ],
         ),
       ),

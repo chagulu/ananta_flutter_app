@@ -20,6 +20,9 @@ dependencies:
   # QR scanner for guest flows (optional; remove if not needed)
   qr_code_scanner_plus: ^2.0.0
 
+  # QR code generator for resident flows
+  qr_flutter: ^4.1.0
+
   # Optional: Typed API clients and JSON models
   retrofit: ^4.0.3
   json_annotation: ^4.9.0

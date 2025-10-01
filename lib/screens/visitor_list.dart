@@ -119,27 +119,26 @@ class _VisitorListPageState extends State<VisitorListPage> {
     return status;
   }
 
-  /// Manual approve API call (resident only)
-  Future<void> _approve(int id, String mobileNo) async {
+  /// ✅ Unified action: approve or reject
+  Future<void> _visitorAction(int id, String action) async {
     try {
-      await api.post(
-        '/api/visitor/approve/$id',
-        data: {"mobileNo": mobileNo}, // ✅ JSON body
-      );
+      await api.post('/api/visitor/$id/action', queryParameters: {'action': action});
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Approved successfully')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${action[0].toUpperCase()}${action.substring(1)}d successfully')),
+      );
       await _fetch(reset: true);
     } on DioException catch (e) {
       final msg = e.response?.data is Map
-          ? ((e.response?.data['message'] ?? 'Approve failed').toString())
-          : (e.message ?? 'Approve failed');
+          ? ((e.response?.data['message'] ?? '${action[0].toUpperCase()}${action.substring(1)} failed').toString())
+          : (e.message ?? '${action[0].toUpperCase()}${action.substring(1)} failed');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Approve failed')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${action[0].toUpperCase()}${action.substring(1)} failed')),
+      );
     }
   }
 
@@ -231,7 +230,11 @@ class _VisitorListPageState extends State<VisitorListPage> {
                   Text('Purpose: $purpose'),
                   Text('Time: $time'),
                   const SizedBox(height: 6),
-                  Row(
+                  // ✅ Wrap buttons & chip to avoid overflow
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 4,
                     children: [
                       Chip(
                         label: Text(label),
@@ -244,21 +247,30 @@ class _VisitorListPageState extends State<VisitorListPage> {
                         visualDensity: VisualDensity.compact,
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      const SizedBox(width: 8),
-                      // ✅ Approve button only for resident
-                      if (isPending && widget.loginType == LoginType.residence)
+                      if (isPending && widget.loginType == LoginType.residence) ...[
                         FilledButton.icon(
                           style: FilledButton.styleFrom(
                             backgroundColor: Colors.green,
                             foregroundColor: Colors.white,
                             visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           ),
-                          onPressed: id == 0 ? null : () => _approve(id, mobile),
+                          onPressed: id == 0 ? null : () => _visitorAction(id, 'approve'),
                           icon: const Icon(Icons.check_circle_outline, size: 18),
                           label: const Text('Approve'),
                         ),
+                        FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          ),
+                          onPressed: id == 0 ? null : () => _visitorAction(id, 'reject'),
+                          icon: const Icon(Icons.cancel_outlined, size: 18),
+                          label: const Text('Reject'),
+                        ),
+                      ],
                     ],
                   ),
                 ],
@@ -271,7 +283,7 @@ class _VisitorListPageState extends State<VisitorListPage> {
                     ? null
                     : () async {
                         final link =
-                            '${AppConfig.baseUrl}/api/visitor/approve/$id';
+                            '${AppConfig.baseUrl}/api/visitor/$id/action?action=approve';
                         await Clipboard.setData(ClipboardData(text: link));
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(

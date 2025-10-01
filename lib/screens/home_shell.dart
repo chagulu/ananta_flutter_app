@@ -23,7 +23,6 @@ class AuthInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
-    // If server says unauthorized -> redirect to login
     if (err.response?.statusCode == 401) {
       await _secure.deleteAll();
     }
@@ -42,7 +41,7 @@ final Dio api = Dio(
 
 class HomeShell extends StatefulWidget {
   final LoginType loginType;
-  final String role; // pass role from OTP verification
+  final String role;
   const HomeShell({super.key, required this.loginType, required this.role});
 
   @override
@@ -62,7 +61,6 @@ class _HomeShellState extends State<HomeShell> {
     _checkTokenStatus();
   }
 
-  /// 🔑 Validate token on app start
   Future<void> _checkTokenStatus() async {
     try {
       final token = await _secure.read(key: 'access_token');
@@ -79,9 +77,7 @@ class _HomeShellState extends State<HomeShell> {
     } catch (_) {
       _redirectToLogin();
     } finally {
-      if (mounted) {
-        setState(() => _checkingToken = false);
-      }
+      if (mounted) setState(() => _checkingToken = false);
     }
   }
 
@@ -101,7 +97,7 @@ class _HomeShellState extends State<HomeShell> {
         const GenerateQrPage(),
         const ManualEntryPage(),
       ];
-      _destinations = const [
+      _destinations = [
         NavigationDestination(
           icon: Icon(Icons.apartment_outlined),
           selectedIcon: Icon(Icons.apartment),
@@ -124,7 +120,7 @@ class _HomeShellState extends State<HomeShell> {
         VisitorListPage(loginType: widget.loginType),
         const SizedBox.shrink(),
       ];
-      _destinations = const [
+      _destinations = [
         NavigationDestination(
           icon: Icon(Icons.apartment_outlined),
           selectedIcon: Icon(Icons.apartment),
@@ -133,7 +129,7 @@ class _HomeShellState extends State<HomeShell> {
         NavigationDestination(
           icon: Icon(Icons.info_outline),
           selectedIcon: Icon(Icons.info),
-          label: '',
+          label: 'Info',
         ),
       ];
     }
@@ -157,25 +153,19 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
     if (_checkingToken) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    // Prevent Android back button from going back to login
     return WillPopScope(
       onWillPop: () async => false,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Ananta'),
-          backgroundColor: scheme.surface,
           actions: [
             PopupMenuButton<String>(
               onSelected: _onMenuSelected,
-              itemBuilder: (context) => const [
+              itemBuilder: (_) => const [
                 PopupMenuItem(value: 'profile', child: Text('Profile')),
                 PopupMenuItem(value: 'settings', child: Text('Settings')),
                 PopupMenuItem(value: 'logout', child: Text('Logout')),

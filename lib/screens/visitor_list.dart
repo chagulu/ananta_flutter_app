@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
@@ -14,13 +16,14 @@ class VisitorListPage extends StatefulWidget {
   State<VisitorListPage> createState() => _VisitorListPageState();
 }
 
-class _VisitorListPageState extends State<VisitorListPage> {
+class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingObserver {
   int _page = 0;
   final int _size = 10;
   bool _loading = false;
   bool _more = true;
   String? _error;
   final List<Map<String, dynamic>> _items = [];
+  Timer? _pollingTimer;
 
   String get _endpoint {
     return widget.loginType == LoginType.guard
@@ -31,7 +34,30 @@ class _VisitorListPageState extends State<VisitorListPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _fetch(reset: true);
+    _startPolling();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _pollingTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startPolling();
+    } else if (state == AppLifecycleState.paused) {
+      _pollingTimer?.cancel();
+    }
+  }
+
+  void _startPolling() {
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 100), (_) => _fetch(reset: true));
   }
 
   Future<void> _fetch({bool reset = false}) async {
@@ -120,7 +146,6 @@ class _VisitorListPageState extends State<VisitorListPage> {
     return status;
   }
 
-  /// ✅ Unified action: approve or reject
   Future<void> _visitorAction(int id, String action) async {
     try {
       await api.post('/api/visitor/$id/action', queryParameters: {'action': action});
@@ -143,7 +168,6 @@ class _VisitorListPageState extends State<VisitorListPage> {
     }
   }
 
-  /// ✅ Convert UTC visitTime to IST
   String formatToIST(String utcTime) {
     try {
       final dateTime = DateTime.parse(utcTime).toUtc();
@@ -244,48 +268,46 @@ class _VisitorListPageState extends State<VisitorListPage> {
                   Text('Purpose: $purpose'),
                   Text('Time: $time'),
                   const SizedBox(height: 6),
-                  // ✅ Wrap buttons & chip to avoid overflow
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      Chip(
-                        label: Text(label),
-                        backgroundColor: color.withOpacity(0.15),
-                        labelStyle: TextStyle(
-                          color: color,
-                          fontWeight: FontWeight.w600,
+                  // Horizontal scroll + FittedBox to prevent overflow
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        Chip(
+                          label: Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+                          backgroundColor: color.withOpacity(0.15),
+                          side: BorderSide(color: color, width: 1),
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
                         ),
-                        side: BorderSide(color: color),
-                        visualDensity: VisualDensity.compact,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      if (isPending && widget.loginType == LoginType.residence) ...[
-                        FilledButton.icon(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        const SizedBox(width: 4),
+                        if (isPending && widget.loginType == LoginType.residence) ...[
+                          FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                            ),
+                            onPressed: id == 0 ? null : () => _visitorAction(id, 'approve'),
+                            icon: const Icon(Icons.check_circle_outline, size: 14),
+                            label: const Text('Approve', style: TextStyle(fontSize: 10)),
                           ),
-                          onPressed: id == 0 ? null : () => _visitorAction(id, 'approve'),
-                          icon: const Icon(Icons.check_circle_outline, size: 18),
-                          label: const Text('Approve'),
-                        ),
-                        FilledButton.icon(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            foregroundColor: Colors.white,
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          const SizedBox(width: 2),
+                          FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                            ),
+                            onPressed: id == 0 ? null : () => _visitorAction(id, 'reject'),
+                            icon: const Icon(Icons.cancel_outlined, size: 14),
+                            label: const Text('Reject', style: TextStyle(fontSize: 10)),
                           ),
-                          onPressed: id == 0 ? null : () => _visitorAction(id, 'reject'),
-                          icon: const Icon(Icons.cancel_outlined, size: 18),
-                          label: const Text('Reject'),
-                        ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ],
               ),

@@ -9,6 +9,7 @@ import 'screens/visitor_qr.dart';
 import 'screens/visitor_manual_entry.dart';
 import 'screens/home_shell.dart';
 
+
 void main() {
   runApp(const AnantaApp());
 }

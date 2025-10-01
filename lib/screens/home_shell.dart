@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:ananta_app/screens/visitor_list.dart';
 import 'package:ananta_app/screens/visitor_qr.dart';
 import 'package:ananta_app/screens/visitor_manual_entry.dart';
+import 'package:ananta_app/screens/send_otp_page.dart';
 import '../config.dart';
 import '../models/login_type.dart';
 
@@ -18,6 +19,15 @@ class AuthInterceptor extends Interceptor {
       options.headers['Authorization'] = 'Bearer $token';
     }
     handler.next(options);
+  }
+
+  @override
+  void onError(DioException err, ErrorInterceptorHandler handler) async {
+    // If server says unauthorized -> redirect to login
+    if (err.response?.statusCode == 401) {
+      await _secure.deleteAll();
+    }
+    handler.next(err);
   }
 }
 
@@ -43,11 +53,45 @@ class _HomeShellState extends State<HomeShell> {
   int _index = 0;
   late List<Widget> _pages;
   late List<NavigationDestination> _destinations;
+  bool _checkingToken = true;
 
   @override
   void initState() {
     super.initState();
     _setupMenu();
+    _checkTokenStatus();
+  }
+
+  /// 🔑 Validate token on app start
+  Future<void> _checkTokenStatus() async {
+    try {
+      final token = await _secure.read(key: 'access_token');
+      if (token == null || token.isEmpty) {
+        _redirectToLogin();
+        return;
+      }
+
+      final res = await api.get('/guard/auth/check-token');
+      final data = res.data;
+      if (data is Map && (data['expired'] == true || data['active'] == false)) {
+        _redirectToLogin();
+      }
+    } catch (_) {
+      _redirectToLogin();
+    } finally {
+      if (mounted) {
+        setState(() => _checkingToken = false);
+      }
+    }
+  }
+
+  void _redirectToLogin() async {
+    await _secure.deleteAll();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const SendOtpPage()),
+      (route) => false,
+    );
   }
 
   void _setupMenu() {
@@ -78,7 +122,7 @@ class _HomeShellState extends State<HomeShell> {
       // Residence role
       _pages = [
         VisitorListPage(loginType: widget.loginType),
-        const SizedBox.shrink(), // dummy page to satisfy NavigationBar
+        const SizedBox.shrink(),
       ];
       _destinations = const [
         NavigationDestination(
@@ -106,10 +150,7 @@ class _HomeShellState extends State<HomeShell> {
             .showSnackBar(const SnackBar(content: Text('Settings coming soon')));
         break;
       case 'logout':
-        await _secure.delete(key: 'access_token');
-        await _secure.delete(key: 'user_role');
-        if (!mounted) return;
-        Navigator.of(context).popUntil((r) => r.isFirst);
+        _redirectToLogin();
         break;
     }
   }
@@ -118,29 +159,39 @@ class _HomeShellState extends State<HomeShell> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Ananta'),
-        backgroundColor: scheme.surface,
-        actions: [
-          PopupMenuButton<String>(
-            onSelected: _onMenuSelected,
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'profile', child: Text('Profile')),
-              PopupMenuItem(value: 'settings', child: Text('Settings')),
-              PopupMenuItem(value: 'logout', child: Text('Logout')),
-            ],
-          ),
-        ],
-      ),
-      body: IndexedStack(
-        index: _index.clamp(0, _pages.length - 1),
-        children: _pages,
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: _destinations,
+    if (_checkingToken) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // Prevent Android back button from going back to login
+    return WillPopScope(
+      onWillPop: () async => false,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Ananta'),
+          backgroundColor: scheme.surface,
+          actions: [
+            PopupMenuButton<String>(
+              onSelected: _onMenuSelected,
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'profile', child: Text('Profile')),
+                PopupMenuItem(value: 'settings', child: Text('Settings')),
+                PopupMenuItem(value: 'logout', child: Text('Logout')),
+              ],
+            ),
+          ],
+        ),
+        body: IndexedStack(
+          index: _index.clamp(0, _pages.length - 1),
+          children: _pages,
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _index,
+          onDestinationSelected: (i) => setState(() => _index = i),
+          destinations: _destinations,
+        ),
       ),
     );
   }

@@ -49,7 +49,7 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
 
   void _startPolling() {
     _pollingTimer?.cancel();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 15), (_) => _fetch(reset: true));
+    _pollingTimer = Timer.periodic(const Duration(seconds: 1500), (_) => _fetch(reset: true));
   }
 
   Future<void> _fetch({bool reset = false}) async {
@@ -65,33 +65,48 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
     setState(() => _loading = true);
 
     try {
-      // Validate flat & building selection
-      if ((_selectedFlat != null && _selectedBuilding == null) || (_selectedFlat == null && _selectedBuilding != null)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Both Flat and Building must be selected together')),
-        );
+      // Validate flat & building selection (must be both or none)
+      final invalidPair = (_selectedFlat != null && _selectedBuilding == null) ||
+          (_selectedFlat == null && _selectedBuilding != null);
+      if (invalidPair) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Both Flat and Building must be selected together')),
+          );
+        }
+        if (mounted) setState(() => _loading = false); // ensure loading is cleared
         return;
       }
 
-      final res = await api.get('/api/residences', queryParameters: {
+      // Build query map without nulls/empties
+      final qp = <String, dynamic>{
         'page': _page,
         'size': _size,
-        'name': _nameController.text.isEmpty ? null : _nameController.text,
-        'mobileNo': _mobileController.text.isEmpty ? null : _mobileController.text,
-        'flatNumber': _selectedFlat,
-        'buildingNumber': _selectedBuilding,
-      });
+      };
+      final name = _nameController.text.trim();
+      final mobile = _mobileController.text.trim();
+      if (name.isNotEmpty) qp['name'] = name;
+      if (mobile.isNotEmpty) qp['mobileNo'] = mobile;
+      if (_selectedFlat != null && _selectedFlat!.isNotEmpty) {
+        qp['flatNumber'] = _selectedFlat!;
+      }
+      if (_selectedBuilding != null && _selectedBuilding!.isNotEmpty) {
+        qp['buildingNumber'] = _selectedBuilding!;
+      }
 
-      final content = res.data['content'] as List<dynamic>? ?? [];
+      final res = await api.get('/api/residences', queryParameters: qp);
+
+      final content = res.data['content'] as List<dynamic>? ?? const [];
 
       setState(() {
         _residences.addAll(content.map((e) => Map<String, dynamic>.from(e)));
-        _more = (_page + 1) * _size < (res.data['totalElements'] ?? 0);
+        final total = (res.data['totalElements'] ?? 0) as int;
+        _more = (_page + 1) * _size < total;
       });
     } on DioException catch (e) {
       debugPrint('Failed to fetch residences: ${e.message}');
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -104,8 +119,10 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
   void _clearFilters() {
     _nameController.clear();
     _mobileController.clear();
-    _selectedFlat = null;
-    _selectedBuilding = null;
+    setState(() {
+      _selectedFlat = null;
+      _selectedBuilding = null;
+    });
     _fetch(reset: true);
   }
 
@@ -118,6 +135,7 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
               child: TextField(
                 controller: _nameController,
                 decoration: const InputDecoration(labelText: 'Name'),
+                textInputAction: TextInputAction.next,
               ),
             ),
             const SizedBox(width: 8),
@@ -126,6 +144,7 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
                 controller: _mobileController,
                 decoration: const InputDecoration(labelText: 'Mobile No'),
                 keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.done,
               ),
             ),
           ],
@@ -137,7 +156,9 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
               child: DropdownButtonFormField<String>(
                 decoration: const InputDecoration(labelText: 'Flat Number'),
                 value: _selectedFlat,
-                items: kFlatOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                items: kFlatOptions
+                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                    .toList(),
                 onChanged: (val) => setState(() => _selectedFlat = val),
               ),
             ),
@@ -146,7 +167,9 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
               child: DropdownButtonFormField<String>(
                 decoration: const InputDecoration(labelText: 'Building Number'),
                 value: _selectedBuilding,
-                items: kBuildingOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                items: kBuildingOptions
+                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                    .toList(),
                 onChanged: (val) => setState(() => _selectedBuilding = val),
               ),
             ),
@@ -156,13 +179,13 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
         Row(
           children: [
             ElevatedButton.icon(
-              onPressed: () => _fetch(reset: true),
+              onPressed: _loading ? null : () => _fetch(reset: true),
               icon: const Icon(Icons.search),
               label: const Text('Apply Filters'),
             ),
             const SizedBox(width: 12),
             ElevatedButton.icon(
-              onPressed: _clearFilters,
+              onPressed: _loading ? null : _clearFilters,
               icon: const Icon(Icons.clear),
               label: const Text('Clear Filters'),
               style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
@@ -187,13 +210,13 @@ class _ResidenceListPageState extends State<ResidenceListPage> {
           ..._residences.map((res) {
             return Card(
               child: ListTile(
-                title: Text(res['name'] ?? '-'),
+                title: Text(res['name']?.toString() ?? '-'),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Mobile: ${res['mobileNo'] ?? '-'}'),
-                    Text('Address: ${res['address'] ?? '-'}'),
-                    Text('Flat: ${res['flatNumber'] ?? '-'}, Bldg: ${res['buildingNumber'] ?? '-'}'),
+                    Text('Mobile: ${res['mobileNo']?.toString() ?? '-'}'),
+                    Text('Address: ${res['address']?.toString() ?? '-'}'),
+                    Text('Flat: ${res['flatNumber']?.toString() ?? '-'}, Bldg: ${res['buildingNumber']?.toString() ?? '-'}'),
                   ],
                 ),
               ),

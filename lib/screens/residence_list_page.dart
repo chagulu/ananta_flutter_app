@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import '../config.dart';
 import 'home_shell.dart'; // api and baseUrl
 
 class ResidenceListPage extends StatefulWidget {

@@ -89,21 +89,18 @@ class _VisitorListPageState extends State<VisitorListPage> {
     await _fetch();
   }
 
-  // Status color mapping per requirement:
-  // Approved = Green, Pending = Yellow/Orange, Rejected = Red.
   Color _statusColor(String status) {
     switch (status.toUpperCase()) {
       case 'APPROVED':
         return Colors.green;
       case 'PENDING':
-        return Colors.orange; // or Colors.amber
+        return Colors.orange;
       case 'REJECTED':
       default:
         return Colors.red;
     }
   }
 
-  // Card background tint for non-pending states.
   Color? _cardTint(String status) {
     switch (status.toUpperCase()) {
       case 'APPROVED':
@@ -112,7 +109,7 @@ class _VisitorListPageState extends State<VisitorListPage> {
         return Colors.red.withOpacity(0.06);
       case 'PENDING':
       default:
-        return null; // neutral for pending
+        return null;
     }
   }
 
@@ -122,10 +119,13 @@ class _VisitorListPageState extends State<VisitorListPage> {
     return status;
   }
 
-  Future<void> _approve(String token) async {
-    // Implement the approve API call; adjust path/method as per backend
+  /// Manual approve API call (resident only)
+  Future<void> _approve(int id, String mobileNo) async {
     try {
-      await api.post('/api/visitor/approve', queryParameters: {'token': token});
+      await api.post(
+        '/api/visitor/approve/$id',
+        data: {"mobileNo": mobileNo}, // ✅ JSON body
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Approved successfully')));
@@ -201,6 +201,7 @@ class _VisitorListPageState extends State<VisitorListPage> {
           }
 
           final v = _items[index];
+          final id = v['id'] is int ? v['id'] as int : int.tryParse(v['id'].toString()) ?? 0;
           final guestName = (v['guestName'] ?? '').toString();
           final mobile = (v['mobile'] ?? '').toString();
           final flat = (v['flatNumber'] ?? '-').toString();
@@ -208,7 +209,6 @@ class _VisitorListPageState extends State<VisitorListPage> {
           final purpose = (v['visitPurpose'] ?? '-').toString();
           final status = (v['approveStatus'] ?? '-').toString();
           final time = (v['visitTime'] ?? '-').toString();
-          final token = (v['token'] ?? '').toString();
 
           final color = _statusColor(status);
           final tint = _cardTint(status);
@@ -245,7 +245,8 @@ class _VisitorListPageState extends State<VisitorListPage> {
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                       const SizedBox(width: 8),
-                      if (isPending)
+                      // ✅ Approve button only for resident
+                      if (isPending && widget.loginType == LoginType.residence)
                         FilledButton.icon(
                           style: FilledButton.styleFrom(
                             backgroundColor: Colors.green,
@@ -254,7 +255,7 @@ class _VisitorListPageState extends State<VisitorListPage> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 6),
                           ),
-                          onPressed: token.isEmpty ? null : () => _approve(token),
+                          onPressed: id == 0 ? null : () => _approve(id, mobile),
                           icon: const Icon(Icons.check_circle_outline, size: 18),
                           label: const Text('Approve'),
                         ),
@@ -266,11 +267,11 @@ class _VisitorListPageState extends State<VisitorListPage> {
               trailing: IconButton(
                 icon: const Icon(Icons.copy),
                 tooltip: 'Copy approval link',
-                onPressed: token.isEmpty
+                onPressed: id == 0
                     ? null
                     : () async {
                         final link =
-                            '${AppConfig.baseUrl}/api/visitor/approve?token=$token';
+                            '${AppConfig.baseUrl}/api/visitor/approve/$id';
                         await Clipboard.setData(ClipboardData(text: link));
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(

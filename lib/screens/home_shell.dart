@@ -50,27 +50,36 @@ class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key, required this.role});
 
   Widget _statCard(BuildContext ctx, String title, String value, IconData icon, Color color) {
+    final cs = Theme.of(ctx).colorScheme;
     return Card(
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: cs.outlineVariant),
+      ),
       child: Container(
         padding: const EdgeInsets.all(16),
         width: double.infinity,
         child: Row(
           children: [
-            CircleAvatar(
-              backgroundColor: color.withOpacity(0.15),
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.14),
+                borderRadius: BorderRadius.circular(10),
+              ),
               child: Icon(icon, color: color),
             ),
             const SizedBox(width: 16),
-            Expanded(
-              child: Text(title, style: Theme.of(ctx).textTheme.bodyLarge),
+            Expanded(child: Text(title, style: Theme.of(ctx).textTheme.bodyLarge)),
+            Text(
+              value,
+              style: Theme.of(ctx).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ),
             ),
-            Text(value,
-                style: Theme.of(ctx).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: color,
-                    )),
           ],
         ),
       ),
@@ -81,7 +90,7 @@ class DashboardPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    // ⚡ For now values are static demo data; replace with API calls
+    // Demo data; replace with API-backed values
     if (role == "ROLE_RESIDENCE") {
       return ListView(
         padding: const EdgeInsets.all(16),
@@ -96,7 +105,7 @@ class DashboardPage extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: [
           _statCard(context, "Today's visitors", "15", Icons.today, cs.primary),
-          _statCard(context, "Approved", "10", Icons.check_circle, Colors.green),
+          _statCard(context, "Approved", "10", Icons.verified, Colors.green),
           _statCard(context, "Rejected", "3", Icons.cancel, Colors.red),
           _statCard(context, "Pending", "2", Icons.pending, cs.tertiary),
         ],
@@ -125,24 +134,36 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMixin {
   int _index = 0;
   late List<Widget> _pages;
   late List<NavigationDestination> _destinations;
   bool _checkingToken = true;
 
-  final FlutterLocalNotificationsPlugin _localNotificationsPlugin =
-      FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _localNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
   int _notifCount = 0;
   final List<Map<String, String>> _notifications = [];
 
+  // Animated indicator controller for bottom bar
+  late final AnimationController _indicatorController;
+  late Animation<double> _indicatorAnim;
+
   @override
   void initState() {
     super.initState();
+    _indicatorController = AnimationController(vsync: this, duration: const Duration(milliseconds: 280));
+    _indicatorAnim = CurvedAnimation(parent: _indicatorController, curve: Curves.easeOutCubic);
+
     _setupMenu();
     _checkTokenStatus();
     _setupFCM();
+  }
+
+  @override
+  void dispose() {
+    _indicatorController.dispose();
+    super.dispose();
   }
 
   Future<void> _checkTokenStatus() async {
@@ -233,14 +254,13 @@ class _HomeShellState extends State<HomeShell> {
 
     const AndroidInitializationSettings androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const InitializationSettings initSettings = InitializationSettings(android: androidInit);
-
     await _localNotificationsPlugin.initialize(initSettings);
 
     FirebaseMessaging messaging = FirebaseMessaging.instance;
     await messaging.requestPermission(alert: true, badge: true, sound: true);
 
     final token = await messaging.getToken();
-    print("FCM Token: $token");
+    debugPrint("FCM Token: $token");
 
     FirebaseMessaging.onMessage.listen((m) {
       _addNotification(m);
@@ -273,6 +293,99 @@ class _HomeShellState extends State<HomeShell> {
     );
   }
 
+  // ---------- Colorful NavigationBar ----------
+  // Build a colorful, animated NavigationBar with pill selection and gradient indicator
+  Widget _buildColorfulNavBar(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    // Role-aware color palette
+    final rolePrimary = widget.role == 'ROLE_GUARD'
+        ? Colors.teal
+        : widget.role == 'ROLE_RESIDENCE'
+            ? cs.primary
+            : Colors.purple;
+    final roleSecondary = widget.role == 'ROLE_GUARD'
+        ? Colors.indigo
+        : widget.role == 'ROLE_RESIDENCE'
+            ? cs.tertiary
+            : Colors.orange;
+
+    // Animate indicator on selection change
+    _indicatorController.forward(from: 0);
+
+    return NavigationBarTheme(
+      data: NavigationBarThemeData(
+        height: 78,
+        elevation: 3,
+        backgroundColor: cs.surface, // keep surface to let colors pop
+        indicatorColor: Colors.transparent, // custom indicator below
+        labelTextStyle: MaterialStateProperty.resolveWith((states) {
+          final selected = states.contains(MaterialState.selected);
+          return TextStyle(
+            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+            color: selected ? rolePrimary : cs.onSurfaceVariant,
+          );
+        }),
+        iconTheme: MaterialStateProperty.resolveWith((states) {
+          final selected = states.contains(MaterialState.selected);
+          return IconThemeData(
+            color: selected ? rolePrimary : cs.onSurfaceVariant,
+            size: selected ? 26 : 24,
+          );
+        }),
+      ),
+      child: Stack(
+        children: [
+          // Gradient indicator bar at the top of NavigationBar
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            child: SizeTransition(
+              sizeFactor: _indicatorAnim,
+              axis: Axis.vertical,
+              axisAlignment: -1,
+              child: Container(
+                height: 3,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [rolePrimary, roleSecondary],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // The actual NavigationBar with colorful selected pills
+          NavigationBar(
+            selectedIndex: _index,
+            onDestinationSelected: (i) => setState(() => _index = i),
+            destinations: _destinations.map((d) {
+              final idx = _destinations.indexOf(d);
+              final selected = idx == _index;
+              return NavigationDestination(
+                icon: _ColoredIconBadge(
+                  icon: d.icon,
+                  selected: selected,
+                  rolePrimary: rolePrimary,
+                  cs: cs,
+                ),
+                selectedIcon: _ColoredIconBadge(
+                  icon: d.selectedIcon ?? d.icon,
+                  selected: true,
+                  rolePrimary: rolePrimary,
+                  cs: cs,
+                ),
+                label: d.label,
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_checkingToken) {
@@ -296,16 +409,46 @@ class _HomeShellState extends State<HomeShell> {
             ),
           ],
         ),
-        body: IndexedStack(
-          index: _index,
-          children: _pages,
-        ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: (i) => setState(() => _index = i),
-          destinations: _destinations,
-        ),
+        body: IndexedStack(index: _index, children: _pages),
+        // Colorful bottom bar
+        bottomNavigationBar: _buildColorfulNavBar(context),
       ),
+    );
+  }
+}
+
+// A rounded pill behind the selected icon for a colorful accent
+class _ColoredIconBadge extends StatelessWidget {
+  final Widget icon;
+  final bool selected;
+  final Color rolePrimary;
+  final ColorScheme cs;
+
+  const _ColoredIconBadge({
+    required this.icon,
+    required this.selected,
+    required this.rolePrimary,
+    required this.cs,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!selected) return icon;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: rolePrimary.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: rolePrimary.withOpacity(0.36)),
+        boxShadow: [
+          BoxShadow(
+            color: rolePrimary.withOpacity(0.18),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: icon,
     );
   }
 }

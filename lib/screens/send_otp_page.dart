@@ -6,6 +6,8 @@ import '../config.dart';
 import '../models/login_type.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+
+
 // inside your _SendOtpPageState
 final FlutterSecureStorage _secure = const FlutterSecureStorage();
 
@@ -142,9 +144,13 @@ class _SendOtpPageState extends State<SendOtpPage> {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (_) => const AdminDashboard(),
+            builder: (_) => const HomeShell(
+              loginType: LoginType.admin,
+              role: "ROLE_ADMIN",
+            ),
           ),
         );
+
       }
     } else {
       setState(() {

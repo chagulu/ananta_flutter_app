@@ -89,16 +89,16 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
       final res = await _dio.post(widget.verifyPath, data: payload);
       final data = res.data is Map ? res.data as Map : <String, dynamic>{};
       final success = data['success'] == true;
-      final token = data['token']?.toString();
-      final role = data['role']?.toString();
+      final token = (data['token'] ?? '').toString();
+      final role = (data['role'] ?? 'ROLE_RESIDENCE').toString();
 
-      if (success && token != null && token.isNotEmpty) {
+      if (success && token.isNotEmpty) {
+        // 🔐 Save token, role, loginType
         await _secure.write(key: 'access_token', value: token);
-        if (role != null && role.isNotEmpty) {
-          await _secure.write(key: 'user_role', value: role);
-        }
+        await _secure.write(key: 'user_role', value: role);
+        await _secure.write(key: 'login_type', value: widget.loginType.name);
 
-        // ✅ Register FCM token immediately after OTP verification using mobileNo
+        // ✅ Register FCM token
         try {
           final fcmToken = await FirebaseMessaging.instance.getToken();
           if (fcmToken != null) {
@@ -113,10 +113,10 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
                 'Content-Type': 'application/json',
               }),
             );
-            print('✅ FCM token registered successfully');
+            debugPrint('✅ FCM token registered successfully');
           }
         } catch (e) {
-          print('❌ Failed to register FCM token: $e');
+          debugPrint('❌ Failed to register FCM token: $e');
         }
 
         if (!mounted) return;
@@ -124,7 +124,7 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
           MaterialPageRoute(
             builder: (_) => HomeShell(
               loginType: widget.loginType,
-              role: role ?? 'ROLE_RESIDENCE',
+              role: role,
             ),
           ),
           (route) => false,

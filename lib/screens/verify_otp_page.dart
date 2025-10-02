@@ -33,7 +33,7 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
   late final Dio _dio;
   final _secure = const FlutterSecureStorage();
 
-  // UX: resend timer
+  // Resend UX
   Timer? _timer;
   int _secondsLeft = 45;
 
@@ -127,7 +127,6 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
   }
 
   Future<void> _resend() async {
-    // Optional: call resend endpoint if available; for now just restart timer and show banner
     setState(() {
       _banner = 'A new OTP has been sent';
       _isError = false;
@@ -135,14 +134,13 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
     _startTimer();
   }
 
-  // Pretty 6-digit OTP fields (simple custom; for richer UI see packages below)
+  // Visual 6 boxes reflecting controller value
   Widget _otpBoxes(BuildContext context) {
-    final code = _otpCtrl.text.padRight(6);
     final cs = Theme.of(context).colorScheme;
 
     Widget box(int i) {
       final ch = i < _otpCtrl.text.length ? _otpCtrl.text[i] : '';
-      final focused = _otpCtrl.selection.baseOffset == i || (_otpCtrl.text.length == i);
+      final focused = _otpCtrl.text.length == i;
       return AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         width: 48,
@@ -166,12 +164,9 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
       );
     }
 
-    return GestureDetector(
-      onTap: () => FocusScope.of(context).requestFocus(FocusNode()),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: List.generate(6, (i) => box(i)),
-      ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: List.generate(6, (i) => box(i)),
     );
   }
 
@@ -195,7 +190,7 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
               padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
               child: Column(
                 children: [
-                  // Glassy header card
+                  // Header
                   ClipRRect(
                     borderRadius: BorderRadius.circular(20),
                     child: BackdropFilter(
@@ -262,12 +257,13 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
                       ),
                     ),
 
-                  // Hidden real field drives our custom boxes
+                  // Single input approach: Stack the boxes over a minimal TextFormField
                   Form(
                     key: _formKey,
-                    child: Column(
+                    child: Stack(
+                      alignment: Alignment.center,
                       children: [
-                        // Real field for input, but visually minimal
+                        // The real input (visible to OS/keyboard, but visually minimal)
                         TextFormField(
                           controller: _otpCtrl,
                           keyboardType: TextInputType.number,
@@ -276,10 +272,15 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
                           decoration: const InputDecoration(
                             counterText: '',
                             border: InputBorder.none,
-                            contentPadding: EdgeInsets.zero,
+                            // keep minimal to avoid a second visible box
+                            contentPadding: EdgeInsets.symmetric(vertical: 22),
                           ),
-                          // Keep caret hidden by placing offstage
-                          style: const TextStyle(height: 0, color: Colors.transparent),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            // keep text transparent so only boxes show characters
+                            color: Colors.transparent,
+                            height: 0.01, // very small so caret doesn’t shift layout
+                          ),
                           cursorColor: Colors.transparent,
                           onChanged: (_) => setState(() {}),
                           validator: (v) {
@@ -290,8 +291,11 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
                           },
                           onFieldSubmitted: (_) => _verifyOtp(),
                         ),
-                        // Pretty boxes reflecting the value
-                        _otpBoxes(context),
+
+                        // The pretty boxes on top (only visual)
+                        IgnorePointer(
+                          child: _otpBoxes(context),
+                        ),
                       ],
                     ),
                   ),

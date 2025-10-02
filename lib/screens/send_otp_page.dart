@@ -4,9 +4,6 @@ import 'package:ananta_app/screens/verify_otp_page.dart';
 import '../config.dart';
 import '../models/login_type.dart';
 
-
-
-
 class SendOtpPage extends StatefulWidget {
   const SendOtpPage({super.key});
 
@@ -22,9 +19,7 @@ class _SendOtpPageState extends State<SendOtpPage> {
   bool _isError = false;
   LoginType _type = LoginType.guard;
 
-  // Emulator localhost -> host 8080
   static const String baseUrl = AppConfig.baseUrl;
-
   late final Dio _dio;
 
   @override
@@ -44,8 +39,10 @@ class _SendOtpPageState extends State<SendOtpPage> {
     super.dispose();
   }
 
-  String get _sendPath => _type == LoginType.guard ? '/guard/auth/send-otp' : '/residence/auth/send-otp';
-  String get _verifyPath => _type == LoginType.guard ? '/guard/auth/verify-otp' : '/residence/auth/verify-otp';
+  String get _sendPath =>
+      _type == LoginType.guard ? '/guard/auth/send-otp' : '/residence/auth/send-otp';
+  String get _verifyPath =>
+      _type == LoginType.guard ? '/guard/auth/verify-otp' : '/residence/auth/verify-otp';
 
   Future<void> _sendOtp() async {
     final ok = _formKey.currentState?.validate() ?? false;
@@ -75,7 +72,7 @@ class _SendOtpPageState extends State<SendOtpPage> {
             builder: (_) => VerifyOtpPage(
               mobileNo: _mobileCtrl.text.trim(),
               baseUrl: baseUrl,
-              verifyPath: _verifyPath, // pass in path for this login type
+              verifyPath: _verifyPath,
               loginType: _type,
             ),
           ),
@@ -95,9 +92,7 @@ class _SendOtpPageState extends State<SendOtpPage> {
         _isError = true;
       });
     } finally {
-      if (mounted) {
-        setState(() => _submitting = false);
-      }
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
@@ -119,6 +114,15 @@ class _SendOtpPageState extends State<SendOtpPage> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                // Logo added here
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  child: Image.asset(
+                    'assets/logo.png',
+                    height: 100, // adjust as needed
+                  ),
+                ),
+
                 // Toggle row
                 SegmentedButton<LoginType>(
                   segments: const [
@@ -159,7 +163,9 @@ class _SendOtpPageState extends State<SendOtpPage> {
                           child: Text(
                             _banner!,
                             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: _isError ? scheme.onErrorContainer : scheme.onPrimaryContainer,
+                                  color: _isError
+                                      ? scheme.onErrorContainer
+                                      : scheme.onPrimaryContainer,
                                 ),
                           ),
                         ),
@@ -184,7 +190,10 @@ class _SendOtpPageState extends State<SendOtpPage> {
                             alignment: Alignment.centerLeft,
                             child: Text(
                               'Mobile number',
-                              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelLarge
+                                  ?.copyWith(
                                     color: scheme.onSurface,
                                     fontWeight: FontWeight.w600,
                                   ),

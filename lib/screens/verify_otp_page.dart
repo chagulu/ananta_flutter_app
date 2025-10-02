@@ -37,6 +37,10 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
   Timer? _timer;
   int _secondsLeft = 45;
 
+  String get _resendPath => widget.loginType == LoginType.guard
+      ? '/guard/auth/send-otp'
+      : '/residence/auth/send-otp';
+
   @override
   void initState() {
     super.initState();
@@ -127,11 +131,43 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
   }
 
   Future<void> _resend() async {
+    if (_secondsLeft > 0 || _submitting) return; // gated by cooldown and submit state
     setState(() {
-      _banner = 'A new OTP has been sent';
+      _submitting = true; // disable actions during resend
+      _banner = null;
       _isError = false;
     });
-    _startTimer();
+    try {
+      final payload = {"mobileNo": widget.mobileNo};
+      final res = await _dio.post(_resendPath, data: payload);
+      final data = res.data is Map ? res.data as Map : <String, dynamic>{};
+      final success = data['success'] == true;
+      final message = (data['message'] ?? 'OTP re-sent').toString();
+
+      setState(() {
+        _banner = message;
+        _isError = !success;
+      });
+
+      if (success) {
+        _startTimer(); // restart cooldown
+      }
+    } on DioException catch (e) {
+      final msg = e.response?.data is Map
+          ? ((e.response?.data['message'] ?? 'Failed to resend OTP').toString())
+          : (e.message ?? 'Failed to resend OTP');
+      setState(() {
+        _banner = msg;
+        _isError = true;
+      });
+    } catch (_) {
+      setState(() {
+        _banner = 'Failed to resend OTP';
+        _isError = true;
+      });
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   // Visual 6 boxes reflecting controller value
@@ -257,13 +293,12 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
                       ),
                     ),
 
-                  // Single input approach: Stack the boxes over a minimal TextFormField
+                  // Single input: real field under, visual boxes over
                   Form(
                     key: _formKey,
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        // The real input (visible to OS/keyboard, but visually minimal)
                         TextFormField(
                           controller: _otpCtrl,
                           keyboardType: TextInputType.number,
@@ -272,14 +307,12 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
                           decoration: const InputDecoration(
                             counterText: '',
                             border: InputBorder.none,
-                            // keep minimal to avoid a second visible box
                             contentPadding: EdgeInsets.symmetric(vertical: 22),
                           ),
                           textAlign: TextAlign.center,
                           style: const TextStyle(
-                            // keep text transparent so only boxes show characters
                             color: Colors.transparent,
-                            height: 0.01, // very small so caret doesn’t shift layout
+                            height: 0.01,
                           ),
                           cursorColor: Colors.transparent,
                           onChanged: (_) => setState(() {}),
@@ -291,11 +324,7 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
                           },
                           onFieldSubmitted: (_) => _verifyOtp(),
                         ),
-
-                        // The pretty boxes on top (only visual)
-                        IgnorePointer(
-                          child: _otpBoxes(context),
-                        ),
+                        IgnorePointer(child: _otpBoxes(context)),
                       ],
                     ),
                   ),

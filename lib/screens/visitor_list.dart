@@ -25,18 +25,24 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
   Timer? _pollingTimer;
 
   // Filter states
-  String? _filterGuestName;
-  String? _filterMobile;
-  String? _filterFlat;
-  String? _filterBuilding;
-  String? _filterStatus;
-
-  // Dropdown options for flats and buildings
-  final List<String> _flatNumbers = ['C1','C2','C3','C4']; 
-  final List<String> _buildingNumbers = ['B1','B2','B3','B4'];
-
   final TextEditingController _guestNameController = TextEditingController();
   final TextEditingController _mobileController = TextEditingController();
+  String? _selectedFlat;
+  String? _selectedBuilding;
+  String? _selectedStatus;
+
+  // Options aligned with your patterns
+  static const List<String> kFlatOptions = <String>[
+    'A1','A2','B1','B2','C1','C2','D1','D2','E1','E2',
+  ];
+  static const List<String> kBuildingOptions = <String>[
+    'A1','A2','A3','A4','A5','A6','A7','A8',
+  ];
+  static const List<DropdownMenuItem<String>> kStatusOptions = [
+    DropdownMenuItem(value: 'PENDING', child: Text('Pending')),
+    DropdownMenuItem(value: 'APPROVED', child: Text('Approved')),
+    DropdownMenuItem(value: 'REJECTED', child: Text('Rejected')),
+  ];
 
   String get _endpoint => widget.loginType == LoginType.guard
       ? '/api/visitor/guard'
@@ -87,24 +93,48 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
     setState(() => _loading = true);
 
     try {
-      final queryParams = {
+      // Validate paired dropdowns similar to reference page logic:
+      final invalidPair = (_selectedFlat != null && _selectedBuilding == null) ||
+                          (_selectedFlat == null && _selectedBuilding != null);
+      if (invalidPair) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Both Flat and Building must be selected together')),
+          );
+        }
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+
+      // Build query map without nulls/empties (consistent with reference)
+      final qp = <String, dynamic>{
         'page': _page,
         'size': _size,
-        if (_filterGuestName?.isNotEmpty ?? false) 'guestName': _filterGuestName!,
-        if (_filterMobile?.isNotEmpty ?? false) 'mobile': _filterMobile!,
-        if (_filterFlat?.isNotEmpty ?? false) 'flatNumber': _filterFlat!,
-        if (_filterBuilding?.isNotEmpty ?? false) 'buildingNumber': _filterBuilding!,
-        if (_filterStatus?.isNotEmpty ?? false) 'approveStatus': _filterStatus!,
       };
+      final name = _guestNameController.text.trim();
+      final mobile = _mobileController.text.trim();
+      if (name.isNotEmpty) qp['guestName'] = name;
+      if (mobile.isNotEmpty) qp['mobile'] = mobile;
+      if (_selectedFlat != null && _selectedFlat!.isNotEmpty) {
+        qp['flatNumber'] = _selectedFlat!;
+      }
+      if (_selectedBuilding != null && _selectedBuilding!.isNotEmpty) {
+        qp['buildingNumber'] = _selectedBuilding!;
+      }
+      if (_selectedStatus != null && _selectedStatus!.isNotEmpty) {
+        qp['approveStatus'] = _selectedStatus!;
+      }
 
-      final res = await api.get(_endpoint, queryParameters: queryParams);
+      final res = await api.get(_endpoint, queryParameters: qp);
 
       final body = res.data is Map ? (res.data as Map) : <String, dynamic>{};
       final visitorsAny = body['data'];
       final totalPages = (body['pagination']?['totalPages'] ?? 1) as int;
 
       final visitors = visitorsAny is List
-          ? visitorsAny.map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map)).toList()
+          ? visitorsAny
+              .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map))
+              .toList()
           : <Map<String, dynamic>>[];
 
       setState(() {
@@ -119,7 +149,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
     } catch (_) {
       setState(() => _error = 'Failed to load visitors');
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -129,6 +159,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
     await _fetch();
   }
 
+  // Status presentation
   Color _statusColor(String status) {
     switch (status.toUpperCase()) {
       case 'APPROVED':
@@ -185,80 +216,158 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
     }
   }
 
-  Widget _buildFilters() {
+  // Filter UI replicated from reference design
+  Widget _buildFilter() {
     return Card(
-      margin: const EdgeInsets.all(12),
+      elevation: 4,
+      margin: const EdgeInsets.all(4),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
-              controller: _guestNameController,
-              decoration: const InputDecoration(
-                labelText: 'Guest Name',
-                prefixIcon: Icon(Icons.person),
-              ),
-              onChanged: (v) => _filterGuestName = v,
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _mobileController,
-              decoration: const InputDecoration(
-                labelText: 'Mobile',
-                prefixIcon: Icon(Icons.phone),
-              ),
-              keyboardType: TextInputType.phone,
-              onChanged: (v) => _filterMobile = v,
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              value: _filterFlat,
-              decoration: const InputDecoration(labelText: 'Flat Number'),
-              items: _flatNumbers.map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
-              onChanged: (v) => setState(() => _filterFlat = v),
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              value: _filterBuilding,
-              decoration: const InputDecoration(labelText: 'Building Number'),
-              items: _buildingNumbers.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
-              onChanged: (v) => setState(() => _filterBuilding = v),
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              value: _filterStatus,
-              decoration: const InputDecoration(labelText: 'Status'),
-              items: const [
-                DropdownMenuItem(value: 'PENDING', child: Text('Pending')),
-                DropdownMenuItem(value: 'APPROVED', child: Text('Approved')),
-                DropdownMenuItem(value: 'REJECTED', child: Text('Rejected')),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _guestNameController,
+                    decoration: InputDecoration(
+                      labelText: 'Guest Name',
+                      prefixIcon: const Icon(Icons.person),
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    textInputAction: TextInputAction.next,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _mobileController,
+                    decoration: InputDecoration(
+                      labelText: 'Mobile',
+                      prefixIcon: const Icon(Icons.phone),
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.done,
+                  ),
+                ),
               ],
-              onChanged: (v) => setState(() => _filterStatus = v),
             ),
             const SizedBox(height: 12),
             Row(
-              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
-                  onPressed: () {
-                    _guestNameController.clear();
-                    _mobileController.clear();
-                    setState(() {
-                      _filterGuestName = null;
-                      _filterMobile = null;
-                      _filterFlat = null;
-                      _filterBuilding = null;
-                      _filterStatus = null;
-                    });
-                    _fetch(reset: true);
-                  },
-                  child: const Text('Reset'),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Flat Number',
+                      prefixIcon: const Icon(Icons.home),
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    value: _selectedFlat,
+                    items: kFlatOptions
+                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                        .toList(),
+                    onChanged: (val) => setState(() => _selectedFlat = val),
+                    isExpanded: true,
+                  ),
                 ),
                 const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () => _fetch(reset: true),
-                  child: const Text('Apply'),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Building Number',
+                      prefixIcon: const Icon(Icons.apartment),
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    value: _selectedBuilding,
+                    items: kBuildingOptions
+                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                        .toList(),
+                    onChanged: (val) => setState(() => _selectedBuilding = val),
+                    isExpanded: true,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Status',
+                      prefixIcon: const Icon(Icons.verified_outlined),
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    value: _selectedStatus,
+                    items: kStatusOptions,
+                    onChanged: (val) => setState(() => _selectedStatus = val),
+                    isExpanded: true,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Container(), // spacer to keep grid consistent
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _loading ? null : () => _fetch(reset: true),
+                    icon: const Icon(Icons.search),
+                    label: const Text('Apply Filters'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _loading
+                        ? null
+                        : () {
+                            _guestNameController.clear();
+                            _mobileController.clear();
+                            setState(() {
+                              _selectedFlat = null;
+                              _selectedBuilding = null;
+                              _selectedStatus = null;
+                            });
+                            _fetch(reset: true);
+                          },
+                    icon: const Icon(Icons.clear),
+                    label: const Text('Clear Filters'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey.shade600,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -271,7 +380,12 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
   Widget _buildVisitorItem(BuildContext context, int index) {
     if (index >= _items.length) {
       _loadMore();
-      return const Center(child: Padding(padding: EdgeInsets.symmetric(vertical: 16), child: CircularProgressIndicator()));
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: CircularProgressIndicator(),
+        ),
+      );
     }
 
     final v = _items[index];
@@ -306,7 +420,10 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
               child: Row(
                 children: [
                   Chip(
-                    label: Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+                    label: Text(
+                      label,
+                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+                    ),
                     backgroundColor: color.withOpacity(0.15),
                     side: BorderSide(color: color, width: 1),
                     visualDensity: VisualDensity.compact,
@@ -315,14 +432,24 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
                   const SizedBox(width: 4),
                   if (isPending && widget.loginType == LoginType.residence) ...[
                     FilledButton.icon(
-                      style: FilledButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, visualDensity: VisualDensity.compact, padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4)),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      ),
                       onPressed: id == 0 ? null : () => _visitorAction(id, 'approve'),
                       icon: const Icon(Icons.check_circle_outline, size: 14),
                       label: const Text('Approve', style: TextStyle(fontSize: 10)),
                     ),
                     const SizedBox(width: 2),
                     FilledButton.icon(
-                      style: FilledButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, visualDensity: VisualDensity.compact, padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4)),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      ),
                       onPressed: id == 0 ? null : () => _visitorAction(id, 'reject'),
                       icon: const Icon(Icons.cancel_outlined, size: 14),
                       label: const Text('Reject', style: TextStyle(fontSize: 10)),
@@ -337,12 +464,17 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
         trailing: IconButton(
           icon: const Icon(Icons.copy),
           tooltip: 'Copy approval link',
-          onPressed: id == 0 ? null : () async {
-            final link = '${AppConfig.baseUrl}/api/visitor/$id/action?action=approve';
-            await Clipboard.setData(ClipboardData(text: link));
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Approval link copied')));
-          },
+          onPressed: id == 0
+              ? null
+              : () async {
+                  final link =
+                      '${AppConfig.baseUrl}/api/visitor/$id/action?action=approve';
+                  await Clipboard.setData(ClipboardData(text: link));
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Approval link copied')),
+                  );
+                },
         ),
       ),
     );
@@ -350,37 +482,68 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
 
   @override
   Widget build(BuildContext context) {
+    // Single vertical scroll: filters + list in one column inside a scroll view
     return Scaffold(
       appBar: AppBar(title: const Text('Visitors')),
       body: RefreshIndicator(
         onRefresh: () => _fetch(reset: true),
-        child: ListView(
-          padding: const EdgeInsets.all(0),
-          children: [
-            _buildFilters(),
-            if (_loading && _items.isEmpty)
-              const Center(child: CircularProgressIndicator())
-            else if (_error != null && _items.isEmpty)
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(_error!, textAlign: TextAlign.center),
-                      const SizedBox(height: 12),
-                      FilledButton.icon(onPressed: () => _fetch(reset: true), icon: const Icon(Icons.refresh), label: const Text('Retry')),
-                    ],
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildFilter(),
+              if (_loading && _items.isEmpty)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(),
                   ),
+                )
+              else if (_error != null && _items.isEmpty)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_error!, textAlign: TextAlign.center),
+                        const SizedBox(height: 12),
+                        FilledButton.icon(
+                          onPressed: () => _fetch(reset: true),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else if (_items.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 160),
+                  child: Center(child: Text('No visitors yet')),
+                )
+              else
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _items.length + (_more ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (index >= _items.length) {
+                      // bottom spinner to fetch more
+                      _loadMore();
+                      return const Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    }
+                    return _buildVisitorItem(context, index);
+                  },
                 ),
-              )
-            else if (_items.isEmpty)
-              const Padding(padding: EdgeInsets.symmetric(vertical: 160), child: Center(child: Text('No visitors yet')))
-            else
-              ...List.generate(_items.length, (index) => _buildVisitorItem(context, index)),
-            if (_more && _items.isNotEmpty)
-              const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Center(child: CircularProgressIndicator())),
-          ],
+            ],
+          ),
         ),
       ),
     );

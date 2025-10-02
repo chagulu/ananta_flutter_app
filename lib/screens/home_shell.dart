@@ -91,50 +91,57 @@ class _HomeShellState extends State<HomeShell> {
     );
   }
 
-  void _setupMenu() {
-    if (widget.role == 'ROLE_GUARD') {
-      _pages = [
-        const ResidenceListPage(), // Added Residence List as first tab
-        const GenerateQrPage(),
-        const ManualEntryPage(),
-      ];
-      _destinations = const [
-        NavigationDestination(
-          icon: Icon(Icons.apartment_outlined),
-          selectedIcon: Icon(Icons.apartment),
-          label: 'Residence list',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.qr_code_2_outlined),
-          selectedIcon: Icon(Icons.qr_code_2),
-          label: 'Generate QR',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.playlist_add_outlined),
-          selectedIcon: Icon(Icons.playlist_add),
-          label: 'Manual entry',
-        ),
-      ];
-    } else {
-      // Residence role
-      _pages = [
-        const ResidenceListPage(), // first tab is residence list
-        const VisitorListPage(loginType: LoginType.residence),
-      ];
-      _destinations = const [
-        NavigationDestination(
-          icon: Icon(Icons.apartment_outlined),
-          selectedIcon: Icon(Icons.apartment),
-          label: 'Residence list',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.people_outline),
-          selectedIcon: Icon(Icons.people),
-          label: 'Visitors',
-        ),
-      ];
-    }
+    void _setupMenu() {
+  if (widget.role == 'ROLE_GUARD') {
+    _pages = [
+      const ResidenceListPage(),
+      const VisitorListPage(loginType: LoginType.guard), // 👈 add this
+      const GenerateQrPage(),
+      const ManualEntryPage(),
+    ];
+    _destinations = const [
+      NavigationDestination(
+        icon: Icon(Icons.apartment_outlined),
+        selectedIcon: Icon(Icons.apartment),
+        label: 'Residence list',
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.people_outline),
+        selectedIcon: Icon(Icons.people),
+        label: 'Visitors', // 👈 new visitors tab
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.qr_code_2_outlined),
+        selectedIcon: Icon(Icons.qr_code_2),
+        label: 'Generate QR',
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.playlist_add_outlined),
+        selectedIcon: Icon(Icons.playlist_add),
+        label: 'Manual entry',
+      ),
+    ];
+  } else {
+    // Residence role
+    _pages = [
+      const ResidenceListPage(),
+      const VisitorListPage(loginType: LoginType.residence),
+    ];
+    _destinations = const [
+      NavigationDestination(
+        icon: Icon(Icons.apartment_outlined),
+        selectedIcon: Icon(Icons.apartment),
+        label: 'Residence list',
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.people_outline),
+        selectedIcon: Icon(Icons.people),
+        label: 'Visitors',
+      ),
+    ];
   }
+}
+
 
   void _onMenuSelected(String value) async {
     switch (value) {

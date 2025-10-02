@@ -169,7 +169,7 @@ class _HomeShellState extends State<HomeShell> {
       onWillPop: () async => false,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Ananta'),
+          title: const Text('Ananta Residency'),
           actions: [
             PopupMenuButton<String>(
               onSelected: _onMenuSelected,

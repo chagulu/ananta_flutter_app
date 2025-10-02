@@ -484,7 +484,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
   Widget build(BuildContext context) {
     // Single vertical scroll: filters + list in one column inside a scroll view
     return Scaffold(
-      appBar: AppBar(title: const Text('Visitors')),
+      //appBar: AppBar(title: const Text('Visitors')),
       body: RefreshIndicator(
         onRefresh: () => _fetch(reset: true),
         child: SingleChildScrollView(

@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:ananta_app/screens/verify_otp_page.dart';
+import 'package:ananta_app/screens/admin/admin_dashboard.dart';
 import '../config.dart';
 import '../models/login_type.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+// inside your _SendOtpPageState
+final FlutterSecureStorage _secure = const FlutterSecureStorage();
+
 
 class SendOtpPage extends StatefulWidget {
   const SendOtpPage({super.key});
@@ -14,6 +20,9 @@ class SendOtpPage extends StatefulWidget {
 class _SendOtpPageState extends State<SendOtpPage> {
   final _formKey = GlobalKey<FormState>();
   final _mobileCtrl = TextEditingController();
+  final _usernameCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+
   bool _submitting = false;
   String? _banner;
   bool _isError = false;
@@ -36,6 +45,8 @@ class _SendOtpPageState extends State<SendOtpPage> {
   @override
   void dispose() {
     _mobileCtrl.dispose();
+    _usernameCtrl.dispose();
+    _passwordCtrl.dispose();
     super.dispose();
   }
 
@@ -96,6 +107,63 @@ class _SendOtpPageState extends State<SendOtpPage> {
     }
   }
 
+  Future<void> _adminLogin() async {
+  final username = _usernameCtrl.text.trim();
+  final password = _passwordCtrl.text;
+
+  if (username.isEmpty || password.isEmpty) {
+    setState(() {
+      _banner = "Username and password are required";
+      _isError = true;
+    });
+    return;
+  }
+
+  setState(() {
+    _submitting = true;
+    _banner = null;
+    _isError = false;
+  });
+
+  try {
+    final payload = {
+      "username": username,
+      "password": password,
+    };
+    final res = await _dio.post('/api/admin/login', data: payload);
+    final data = res.data as Map;
+    if (data['success'] == true) {
+      // ✅ Store token and role
+      final token = data['data']['token'] ?? '';
+      await _secure.write(key: 'access_token', value: token);
+      await _secure.write(key: 'user_role', value: 'ROLE_ADMIN');
+      await _secure.write(key: 'login_type', value: 'admin');
+
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => const AdminDashboard(),
+          ),
+        );
+      }
+    } else {
+      setState(() {
+        _banner = data['message'] ?? 'Login failed';
+        _isError = true;
+      });
+    }
+  } on DioException catch (e) {
+    final msg = e.response?.data?['message'] ?? e.message ?? 'Login failed';
+    setState(() {
+      _banner = msg;
+      _isError = true;
+    });
+  } finally {
+    if (mounted) setState(() => _submitting = false);
+  }
+}
+
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -114,27 +182,30 @@ class _SendOtpPageState extends State<SendOtpPage> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Logo added here
                 Padding(
                   padding: const EdgeInsets.only(bottom: 24),
                   child: Image.asset(
                     'assets/logo.png',
-                    height: 100, // adjust as needed
+                    height: 100,
                   ),
                 ),
 
-                // Toggle row
                 SegmentedButton<LoginType>(
                   segments: const [
                     ButtonSegment(value: LoginType.guard, label: Text('Guard')),
                     ButtonSegment(value: LoginType.residence, label: Text('Residence')),
+                    ButtonSegment(value: LoginType.admin, label: Text('Admin')),
                   ],
                   selected: <LoginType>{_type},
                   onSelectionChanged: (s) => setState(() => _type = s.first),
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  _type == LoginType.guard ? 'Send OTP to user' : 'Send OTP to residence',
+                  _type == LoginType.guard
+                      ? 'Send OTP to user'
+                      : _type == LoginType.residence
+                          ? 'Send OTP to residence'
+                          : 'Admin login',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 16),
@@ -173,94 +244,148 @@ class _SendOtpPageState extends State<SendOtpPage> {
                     ),
                   ),
 
-                Card(
-                  color: scheme.surface,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(color: scheme.outlineVariant),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        children: [
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Mobile number',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelLarge
-                                  ?.copyWith(
-                                    color: scheme.onSurface,
-                                    fontWeight: FontWeight.w600,
+                // Conditional Form Card
+                _type == LoginType.admin
+                    ? Card(
+                        color: scheme.surface,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(color: scheme.outlineVariant),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            children: [
+                              TextFormField(
+                                controller: _usernameCtrl,
+                                decoration: InputDecoration(
+                                  labelText: 'Username',
+                                  prefixIcon:
+                                      Icon(Icons.person_outline, color: scheme.onSurfaceVariant),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              TextFormField(
+                                controller: _passwordCtrl,
+                                obscureText: true,
+                                decoration: InputDecoration(
+                                  labelText: 'Password',
+                                  prefixIcon:
+                                      Icon(Icons.lock_outline, color: scheme.onSurfaceVariant),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 48,
+                                child: FilledButton.icon(
+                                  icon: _submitting
+                                      ? SizedBox(
+                                          height: 20,
+                                          width: 20,
+                                          child: CircularProgressIndicator(
+                                            color: scheme.onPrimary,
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Icon(Icons.login),
+                                  label: Text(_submitting ? 'Logging in...' : 'Login'),
+                                  onPressed: _submitting ? null : _adminLogin,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : Card(
+                        color: scheme.surface,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(color: scheme.outlineVariant),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
+                              children: [
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    'Mobile number',
+                                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                          color: scheme.onSurface,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                   ),
+                                ),
+                                const SizedBox(height: 8),
+                                TextFormField(
+                                  controller: _mobileCtrl,
+                                  keyboardType: TextInputType.phone,
+                                  textInputAction: TextInputAction.done,
+                                  maxLength: 10,
+                                  decoration: InputDecoration(
+                                    prefixIcon: Icon(Icons.phone_outlined,
+                                        color: scheme.onSurfaceVariant),
+                                    hintText: 'Enter 10-digit mobile number',
+                                    counterText: '',
+                                    filled: true,
+                                    fillColor: scheme.surfaceContainerHighest.withOpacity(0.5),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderSide: BorderSide(color: scheme.outlineVariant),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderSide: BorderSide(color: scheme.primary, width: 1.5),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    errorBorder: OutlineInputBorder(
+                                      borderSide: BorderSide(color: scheme.error),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  validator: (v) {
+                                    final s = (v ?? '').trim();
+                                    if (s.isEmpty) return 'Mobile number is required';
+                                    final is10Digits = RegExp(r'^\d{10}$').hasMatch(s);
+                                    if (!is10Digits) return 'Enter a valid 10-digit number';
+                                    return null;
+                                  },
+                                  onFieldSubmitted: (_) => _sendOtp(),
+                                ),
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 48,
+                                  child: FilledButton.icon(
+                                    icon: _submitting
+                                        ? SizedBox(
+                                            height: 20,
+                                            width: 20,
+                                            child: CircularProgressIndicator(
+                                              color: scheme.onPrimary,
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(Icons.send),
+                                    label: Text(_submitting ? 'Sending...' : 'Send OTP'),
+                                    onPressed: _submitting ? null : _sendOtp,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _mobileCtrl,
-                            keyboardType: TextInputType.phone,
-                            textInputAction: TextInputAction.done,
-                            maxLength: 10,
-                            decoration: InputDecoration(
-                              prefixIcon: Icon(Icons.phone_outlined, color: scheme.onSurfaceVariant),
-                              hintText: 'Enter 10-digit mobile number',
-                              counterText: '',
-                              filled: true,
-                              fillColor: scheme.surfaceContainerHighest.withOpacity(0.5),
-                              enabledBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: scheme.outlineVariant),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: scheme.primary, width: 1.5),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              errorBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: scheme.error),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            validator: (v) {
-                              final s = (v ?? '').trim();
-                              if (s.isEmpty) return 'Mobile number is required';
-                              final is10Digits = RegExp(r'^\d{10}$').hasMatch(s);
-                              if (!is10Digits) return 'Enter a valid 10-digit number';
-                              return null;
-                            },
-                            onFieldSubmitted: (_) => _sendOtp(),
-                          ),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 48,
-                            child: FilledButton.icon(
-                              icon: _submitting
-                                  ? SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        color: scheme.onPrimary,
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.send),
-                              label: Text(_submitting ? 'Sending...' : 'Send OTP'),
-                              onPressed: _submitting ? null : _sendOtp,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                ),
 
                 const SizedBox(height: 16),
                 Text(
-                  'User endpoint: $_sendPath',
+                  _type == LoginType.admin
+                      ? 'Admin endpoint: /api/admin/login'
+                      : 'User endpoint: $_sendPath',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],

@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -31,6 +33,10 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
   late final Dio _dio;
   final _secure = const FlutterSecureStorage();
 
+  // UX: resend timer
+  Timer? _timer;
+  int _secondsLeft = 45;
+
   @override
   void initState() {
     super.initState();
@@ -40,12 +46,28 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
       receiveTimeout: const Duration(seconds: 15),
       headers: {'Content-Type': 'application/json'},
     ));
+    _startTimer();
   }
 
   @override
   void dispose() {
+    _timer?.cancel();
     _otpCtrl.dispose();
     super.dispose();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    setState(() => _secondsLeft = 45);
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) return;
+      if (_secondsLeft <= 1) {
+        t.cancel();
+        setState(() => _secondsLeft = 0);
+      } else {
+        setState(() => _secondsLeft -= 1);
+      }
+    });
   }
 
   Future<void> _verifyOtp() async {
@@ -60,20 +82,17 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
     try {
       final payload = {"mobileNo": widget.mobileNo, "otp": _otpCtrl.text.trim()};
       final res = await _dio.post(widget.verifyPath, data: payload);
-      final data = res.data is Map ? res.data as Map : {};
+      final data = res.data is Map ? res.data as Map : <String, dynamic>{};
       final success = data['success'] == true;
       final token = data['token']?.toString();
       final role = data['role']?.toString();
 
       if (success && token != null && token.isNotEmpty) {
         await _secure.write(key: 'access_token', value: token);
-
         if (role != null && role.isNotEmpty) {
           await _secure.write(key: 'user_role', value: role);
         }
-
         if (!mounted) return;
-
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
             builder: (_) => HomeShell(
@@ -107,57 +126,162 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
     }
   }
 
+  Future<void> _resend() async {
+    // Optional: call resend endpoint if available; for now just restart timer and show banner
+    setState(() {
+      _banner = 'A new OTP has been sent';
+      _isError = false;
+    });
+    _startTimer();
+  }
+
+  // Pretty 6-digit OTP fields (simple custom; for richer UI see packages below)
+  Widget _otpBoxes(BuildContext context) {
+    final code = _otpCtrl.text.padRight(6);
+    final cs = Theme.of(context).colorScheme;
+
+    Widget box(int i) {
+      final ch = i < _otpCtrl.text.length ? _otpCtrl.text[i] : '';
+      final focused = _otpCtrl.selection.baseOffset == i || (_otpCtrl.text.length == i);
+      return AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        width: 48,
+        height: 56,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHighest.withOpacity(0.6),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: focused ? cs.primary : cs.outlineVariant,
+            width: focused ? 1.6 : 1,
+          ),
+        ),
+        child: Text(
+          ch,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+              ),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).requestFocus(FocusNode()),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: List.generate(6, (i) => box(i)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
 
     return WillPopScope(
       onWillPop: () async => false,
       child: Scaffold(
-        appBar: AppBar(title: const Text('Verify OTP'), backgroundColor: scheme.surface),
+        backgroundColor: cs.surface,
+        appBar: AppBar(
+          backgroundColor: cs.surface,
+          centerTitle: true,
+          title: Image.asset('assets/logo.png', height: 28, fit: BoxFit.contain),
+        ),
         body: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
+            constraints: const BoxConstraints(maxWidth: 520),
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
               child: Column(
                 children: [
-                  // Logo added here
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 24),
-                    child: Image.asset(
-                      'assets/logo.png',
-                      height: 100, // adjust as needed
+                  // Glassy header card
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+                        decoration: BoxDecoration(
+                          color: cs.surface.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: cs.outlineVariant),
+                        ),
+                        child: Column(
+                          children: [
+                            const SizedBox(height: 8),
+                            Text(
+                              'Verify One-Time Password',
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Enter the 6-digit code sent to ${widget.mobileNo}',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
+                  const SizedBox(height: 16),
 
                   if (_banner != null)
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 16),
+                      margin: const EdgeInsets.only(bottom: 8),
                       decoration: BoxDecoration(
-                        color: _isError ? scheme.errorContainer : scheme.primaryContainer,
+                        color: _isError ? cs.errorContainer : cs.primaryContainer,
                         borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _isError ? cs.error : cs.primary),
                       ),
-                      child: Text(
-                        _banner!,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: _isError ? scheme.onErrorContainer : scheme.onPrimaryContainer,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            _isError ? Icons.error_outline : Icons.check_circle_outline,
+                            color: _isError ? cs.onErrorContainer : cs.onPrimaryContainer,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _banner!,
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: _isError ? cs.onErrorContainer : cs.onPrimaryContainer,
+                                  ),
                             ),
+                          ),
+                        ],
                       ),
                     ),
+
+                  // Hidden real field drives our custom boxes
                   Form(
                     key: _formKey,
                     child: Column(
                       children: [
-                        Text('Enter OTP sent to ${widget.mobileNo}'),
-                        const SizedBox(height: 8),
+                        // Real field for input, but visually minimal
                         TextFormField(
                           controller: _otpCtrl,
                           keyboardType: TextInputType.number,
                           maxLength: 6,
-                          decoration: const InputDecoration(hintText: '6-digit OTP', counterText: ''),
+                          autofocus: true,
+                          decoration: const InputDecoration(
+                            counterText: '',
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          // Keep caret hidden by placing offstage
+                          style: const TextStyle(height: 0, color: Colors.transparent),
+                          cursorColor: Colors.transparent,
+                          onChanged: (_) => setState(() {}),
                           validator: (v) {
                             final s = (v ?? '').trim();
                             if (s.isEmpty) return 'OTP is required';
@@ -166,22 +290,42 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
                           },
                           onFieldSubmitted: (_) => _verifyOtp(),
                         ),
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 48,
-                          child: FilledButton.icon(
-                            icon: _submitting
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2))
-                                : const Icon(Icons.verified),
-                            label: Text(_submitting ? 'Verifying...' : 'Verify OTP'),
-                            onPressed: _submitting ? null : _verifyOtp,
-                          ),
-                        ),
+                        // Pretty boxes reflecting the value
+                        _otpBoxes(context),
                       ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (_secondsLeft > 0)
+                        Text(
+                          'Resend in 0:${_secondsLeft.toString().padLeft(2, '0')}',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
+                        )
+                      else
+                        TextButton.icon(
+                          onPressed: _submitting ? null : _resend,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Resend code'),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: FilledButton.icon(
+                      icon: _submitting
+                          ? const SizedBox(
+                              height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.verified),
+                      label: Text(_submitting ? 'Verifying...' : 'Verify OTP'),
+                      onPressed: _submitting ? null : _verifyOtp,
                     ),
                   ),
                 ],

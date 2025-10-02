@@ -98,14 +98,14 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
           await _secure.write(key: 'user_role', value: role);
         }
 
-        // ✅ Register FCM token immediately after OTP verification
+        // ✅ Register FCM token immediately after OTP verification using mobileNo
         try {
           final fcmToken = await FirebaseMessaging.instance.getToken();
           if (fcmToken != null) {
             await _dio.post(
-              '/api/fcm/register',
+              '/api/notifications/register-token',
               data: {
-                'userId': widget.mobileNo, // or residenceId if available
+                'mobileNo': widget.mobileNo,
                 'fcmToken': fcmToken,
               },
               options: Options(headers: {
@@ -113,10 +113,10 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
                 'Content-Type': 'application/json',
               }),
             );
-            print('FCM token updated successfully');
+            print('✅ FCM token registered successfully');
           }
         } catch (e) {
-          print('Failed to update FCM token: $e');
+          print('❌ Failed to register FCM token: $e');
         }
 
         if (!mounted) return;

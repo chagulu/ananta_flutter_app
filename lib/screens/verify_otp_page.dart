@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:ananta_app/screens/home_shell.dart';
 import '../models/login_type.dart';
 
@@ -96,6 +97,28 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
         if (role != null && role.isNotEmpty) {
           await _secure.write(key: 'user_role', value: role);
         }
+
+        // ✅ Register FCM token immediately after OTP verification
+        try {
+          final fcmToken = await FirebaseMessaging.instance.getToken();
+          if (fcmToken != null) {
+            await _dio.post(
+              '/api/fcm/register',
+              data: {
+                'userId': widget.mobileNo, // or residenceId if available
+                'fcmToken': fcmToken,
+              },
+              options: Options(headers: {
+                'Authorization': 'Bearer $token',
+                'Content-Type': 'application/json',
+              }),
+            );
+            print('FCM token updated successfully');
+          }
+        } catch (e) {
+          print('Failed to update FCM token: $e');
+        }
+
         if (!mounted) return;
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
@@ -131,9 +154,9 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
   }
 
   Future<void> _resend() async {
-    if (_secondsLeft > 0 || _submitting) return; // gated by cooldown and submit state
+    if (_secondsLeft > 0 || _submitting) return;
     setState(() {
-      _submitting = true; // disable actions during resend
+      _submitting = true;
       _banner = null;
       _isError = false;
     });
@@ -149,9 +172,7 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
         _isError = !success;
       });
 
-      if (success) {
-        _startTimer(); // restart cooldown
-      }
+      if (success) _startTimer();
     } on DioException catch (e) {
       final msg = e.response?.data is Map
           ? ((e.response?.data['message'] ?? 'Failed to resend OTP').toString())
@@ -170,7 +191,6 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
     }
   }
 
-  // Visual 6 boxes reflecting controller value
   Widget _otpBoxes(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
@@ -226,7 +246,6 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
               padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
               child: Column(
                 children: [
-                  // Header
                   ClipRRect(
                     borderRadius: BorderRadius.circular(20),
                     child: BackdropFilter(
@@ -262,7 +281,6 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
                   if (_banner != null)
                     Container(
                       width: double.infinity,
@@ -292,8 +310,6 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
                         ],
                       ),
                     ),
-
-                  // Single input: real field under, visual boxes over
                   Form(
                     key: _formKey,
                     child: Stack(
@@ -328,7 +344,6 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,

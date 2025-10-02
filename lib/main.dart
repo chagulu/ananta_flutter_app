@@ -19,6 +19,37 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   print('Background message received: ${message.messageId}');
+  _showNotification(message);
+}
+
+/// Local notification plugin
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
+/// Helper to show local notification
+Future<void> _showNotification(RemoteMessage message) async {
+  final notification = message.notification;
+  final android = notification?.android;
+
+  if (notification != null && android != null) {
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'ananta_channel', // channel id
+      'Ananta Notifications', // channel name
+      channelDescription: 'Channel for Ananta app notifications',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+
+    const NotificationDetails platformDetails =
+        NotificationDetails(android: androidDetails);
+
+    await flutterLocalNotificationsPlugin.show(
+      notification.hashCode,
+      notification.title ?? 'Ananta',
+      notification.body ?? '',
+      platformDetails,
+    );
+  }
 }
 
 void main() async {
@@ -28,6 +59,15 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Initialize local notifications
+  const AndroidInitializationSettings androidInitSettings =
+      AndroidInitializationSettings('@mipmap/ic_launcher');
+
+  const InitializationSettings initSettings =
+      InitializationSettings(android: androidInitSettings);
+
+  await flutterLocalNotificationsPlugin.initialize(initSettings);
 
   // Set background message handler
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
@@ -54,7 +94,7 @@ class AnantaApp extends StatelessWidget {
         '/visitorList': (_) => const VisitorListPage(loginType: LoginType.guard),
         '/generateQr': (_) => const GenerateQrPage(),
         '/manualEntry': (_) => const ManualEntryPage(),
-        '/home': (_) => const HomeLoader(), // dynamic role-based loader
+        '/home': (_) => const HomeLoader(),
       },
     );
   }
@@ -81,23 +121,22 @@ class _HomeLoaderState extends State<HomeLoader> {
     _setupFCM();
   }
 
-  /// Load user role and login type from secure storage
   Future<void> _loadUser() async {
     final role = await _secure.read(key: 'user_role');
     final loginTypeStr = await _secure.read(key: 'login_type');
 
     setState(() {
-      _role = role ?? 'ROLE_GUARD'; // fallback
+      _role = role ?? 'ROLE_GUARD';
       _loginType = loginTypeStr == 'residence' ? LoginType.residence : LoginType.guard;
       _loading = false;
     });
   }
 
-  /// Configure FCM to receive notifications
+  /// Configure FCM + Local Notifications
   Future<void> _setupFCM() async {
     final messaging = FirebaseMessaging.instance;
 
-    // Request notification permission (iOS)
+    // Request permissions
     NotificationSettings settings = await messaging.requestPermission(
       alert: true,
       badge: true,
@@ -108,22 +147,20 @@ class _HomeLoaderState extends State<HomeLoader> {
       print('User granted permission for notifications');
     }
 
-    // Get device token and print
+    // Get FCM token
     final token = await messaging.getToken();
-    print('FCM Token: $token'); // ← Use this in Postman for testing
+    print('✅ FCM Token: $token'); // use in Postman to send test notification
 
-    // Foreground message handler
+    // Foreground notifications
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      print('Foreground notification received: ${message.notification?.title}');
-      print('Message data: ${message.data}');
-      // Optional: show local notification
+      print('Foreground message: ${message.notification?.title}');
+      _showNotification(message);
     });
 
-    // Handle when app is opened via notification
+    // Notification click handler
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      print('Notification opened: ${message.notification?.title}');
-      print('Message data: ${message.data}');
-      // Optional: navigate to specific screen
+      print('Notification clicked: ${message.notification?.title}');
+      // TODO: navigate to screen if needed, e.g. NavigationService.navigatorKey.currentState?.pushNamed("/visitorList");
     });
   }
 

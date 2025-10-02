@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "210121266442",
+    "project_id": "fcm-notification-386b8",
+    "storage_bucket": "fcm-notification-386b8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:210121266442:android:34416c4b5fe410687316f3",
+        "android_client_info": {
+          "package_name": "com.basanta.test"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCt4xuvnbxEiGgkoPOTyE0P54T3ncGtuxY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:210121266442:android:e8c247b55501d1b77316f3",
+        "android_client_info": {
+          "package_name": "com.comapny.ananta"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCt4xuvnbxEiGgkoPOTyE0P54T3ncGtuxY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:210121266442:android:7571be5fce1934fd7316f3",
+        "android_client_info": {
+          "package_name": "com.example.ananta_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCt4xuvnbxEiGgkoPOTyE0P54T3ncGtuxY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

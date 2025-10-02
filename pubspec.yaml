@@ -31,6 +31,17 @@ dependencies:
   retrofit: ^4.0.3
   json_annotation: ^4.9.0
 
+  # Firebase & Notifications
+  firebase_core: ^3.5.0
+  firebase_messaging: ^15.2.0
+
+  # Use GitHub version of flutter_local_notifications to fix Android 13 compile issue
+  flutter_local_notifications:
+    git:
+      url: https://github.com/MaikuB/flutter_local_notifications.git
+      path: flutter_local_notifications
+      ref: master
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -42,5 +53,3 @@ flutter:
   uses-material-design: true
   assets:
     - assets/logo.png
-  
-

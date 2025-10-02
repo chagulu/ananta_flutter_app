@@ -63,26 +63,25 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
       final data = res.data is Map ? res.data as Map : {};
       final success = data['success'] == true;
       final token = data['token']?.toString();
-      final role = data['role']?.toString(); // 👈 extract role from response
+      final role = data['role']?.toString();
 
       if (success && token != null && token.isNotEmpty) {
         await _secure.write(key: 'access_token', value: token);
 
         if (role != null && role.isNotEmpty) {
-          await _secure.write(key: 'user_role', value: role); // 👈 store role
+          await _secure.write(key: 'user_role', value: role);
         }
 
         if (!mounted) return;
 
-        // ✅ Navigate safely to HomeShell, removing OTP page from stack
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
             builder: (_) => HomeShell(
               loginType: widget.loginType,
-              role: role ?? 'ROLE_RESIDENCE', // 👈 pass role
+              role: role ?? 'ROLE_RESIDENCE',
             ),
           ),
-          (route) => false, // remove all previous routes
+          (route) => false,
         );
       } else {
         setState(() {
@@ -113,7 +112,7 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
     final scheme = Theme.of(context).colorScheme;
 
     return WillPopScope(
-      onWillPop: () async => false, // 🔒 Disable back button on OTP page
+      onWillPop: () async => false,
       child: Scaffold(
         appBar: AppBar(title: const Text('Verify OTP'), backgroundColor: scheme.surface),
         body: Center(
@@ -123,6 +122,15 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
+                  // Logo added here
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: Image.asset(
+                      'assets/logo.png',
+                      height: 100, // adjust as needed
+                    ),
+                  ),
+
                   if (_banner != null)
                     Container(
                       width: double.infinity,
@@ -165,7 +173,9 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
                           child: FilledButton.icon(
                             icon: _submitting
                                 ? const SizedBox(
-                                    height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2))
                                 : const Icon(Icons.verified),
                             label: Text(_submitting ? 'Verifying...' : 'Verify OTP'),
                             onPressed: _submitting ? null : _verifyOtp,

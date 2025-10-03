@@ -392,15 +392,30 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
       onWillPop: () async => false,
       child: Scaffold(
         appBar: AppBar(
-          centerTitle: true,
-          title: Image.asset('assets/logo.png', height: 28, fit: BoxFit.contain),
-          actions: const [
-            // Notification dropdown in header
-            NotificationBell(),
-            SizedBox(width: 8),
-            // Existing menu
-          ],
-        ),
+  centerTitle: true,
+  title: Image.asset('assets/logo.png', height: 28, fit: BoxFit.contain),
+  actions: [
+    // Notification dropdown (bell)
+    const NotificationBell(), // keep this first so badge stays near edge
+
+    // Spacing
+    const SizedBox(width: 8),
+
+    // Three-dot overflow menu restored
+    PopupMenuButton<String>(
+      tooltip: 'Menu',
+      onSelected: _onMenuSelected,
+      itemBuilder: (_) => const [
+        PopupMenuItem(value: 'profile', child: Text('Profile')),
+        PopupMenuItem(value: 'settings', child: Text('Settings')),
+        PopupMenuItem(value: 'logout', child: Text('Logout')),
+      ],
+    ),
+
+    // Right padding
+    const SizedBox(width: 4),
+  ],
+),
         body: IndexedStack(index: _index, children: _pages),
         bottomNavigationBar: _buildColorfulNavBar(context),
       ),

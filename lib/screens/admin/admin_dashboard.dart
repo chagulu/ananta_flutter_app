@@ -12,6 +12,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../../firebase_options.dart';
 import 'package:firebase_core/firebase_core.dart';
+import '../admin/residence_register_page.dart';
+
 
 const String baseUrl = AppConfig.baseUrl;
 final _secure = FlutterSecureStorage();
@@ -193,43 +195,63 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
   }
 
   void _setupMenu() {
-    if (widget.role == 'ROLE_GUARD') {
-      _pages = [
-        AdminDashboard(role: widget.role),
-        const ResidenceListPage(),
-        const VisitorListPage(loginType: LoginType.guard),
-        const GenerateQrPage(),
-        const ManualEntryPage(),
-      ];
-      _destinations = const [
-        NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
-        NavigationDestination(icon: Icon(Icons.apartment_outlined), selectedIcon: Icon(Icons.apartment), label: 'Residences'),
-        NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Visitors'),
-        NavigationDestination(icon: Icon(Icons.qr_code_2_outlined), selectedIcon: Icon(Icons.qr_code_2), label: 'QR'),
-        NavigationDestination(icon: Icon(Icons.playlist_add_outlined), selectedIcon: Icon(Icons.playlist_add), label: 'Manual'),
-      ];
-    } else if (widget.role == 'ROLE_RESIDENCE') {
-      _pages = [
-        AdminDashboard(role: widget.role),
-        const VisitorListPage(loginType: LoginType.residence),
-      ];
-      _destinations = const [
-        NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
-        NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Visitors'),
-      ];
-    } else {
-      _pages = [
-        AdminDashboard(role: widget.role),
-        const ResidenceListPage(),
-        const VisitorListPage(loginType: LoginType.guard),
-      ];
-      _destinations = const [
-        NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
-        NavigationDestination(icon: Icon(Icons.apartment_outlined), selectedIcon: Icon(Icons.apartment), label: 'Residences'),
-        NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Visitors'),
-      ];
-    }
+  if (widget.role == 'ROLE_GUARD') {
+    _pages = [
+      AdminDashboard(role: widget.role),
+      const ResidenceListPage(),
+      const VisitorListPage(loginType: LoginType.guard),
+      const GenerateQrPage(),
+      const ManualEntryPage(),
+    ];
+    _destinations = const [
+      NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
+      NavigationDestination(icon: Icon(Icons.apartment_outlined), selectedIcon: Icon(Icons.apartment), label: 'Residences'),
+      NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Visitors'),
+      NavigationDestination(icon: Icon(Icons.qr_code_2_outlined), selectedIcon: Icon(Icons.qr_code_2), label: 'QR'),
+      NavigationDestination(icon: Icon(Icons.playlist_add_outlined), selectedIcon: Icon(Icons.playlist_add), label: 'Manual'),
+    ];
+  } else if (widget.role == 'ROLE_RESIDENCE') {
+    _pages = [
+      AdminDashboard(role: widget.role),
+      const VisitorListPage(loginType: LoginType.residence),
+    ];
+    _destinations = const [
+      NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
+      NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Visitors'),
+    ];
+  } else if (widget.role == 'ROLE_ADMIN') {
+    _pages = [
+      AdminDashboard(role: widget.role),
+      const ResidenceListPage(),
+      const VisitorListPage(loginType: LoginType.guard),
+      const ResidenceRegisterPage(), // <-- Add this page
+    ];
+    _destinations = const [
+      NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
+      NavigationDestination(icon: Icon(Icons.apartment_outlined), selectedIcon: Icon(Icons.apartment), label: 'Residences'),
+      NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Visitors'),
+      NavigationDestination(icon: Icon(Icons.person_add_outlined), selectedIcon: Icon(Icons.person_add), label: 'Create'), // <-- label for new page
+    ];
+  } else {
+    // fallback for unknown roles
+    _pages = [
+      AdminDashboard(role: widget.role),
+      const ResidenceListPage(),
+      const VisitorListPage(loginType: LoginType.guard),
+      const ResidenceRegisterPage(),
+    ];
+    _destinations = const [
+      NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
+      NavigationDestination(icon: Icon(Icons.apartment_outlined), selectedIcon: Icon(Icons.apartment), label: 'Residences'),
+      NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Visitors'),
+      NavigationDestination(icon: Icon(Icons.person_add_outlined), selectedIcon: Icon(Icons.person_add), label: 'Create'),
+    ];
   }
+
+  // Ensure index is in bounds
+  if (_index >= _destinations.length) _index = 0;
+}
+
 
   void _onMenuSelected(String value) async {
     switch (value) {

@@ -1,17 +1,21 @@
+// File: lib/screens/home_shell.dart
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:ananta_app/screens/residence_list_page.dart';
-import 'package:ananta_app/screens/visitor_list.dart';
-import 'package:ananta_app/screens/visitor_qr.dart';
-import 'package:ananta_app/screens/visitor_manual_entry.dart';
-import 'package:ananta_app/screens/send_otp_page.dart';
-import '../config.dart';
-import '../models/login_type.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+import '../config.dart';
+import '../models/login_type.dart';
 import '../firebase_options.dart';
-import 'package:firebase_core/firebase_core.dart';
+import '../screens/residence_list_page.dart';
+import '../screens/visitor_list.dart';
+import '../screens/visitor_qr.dart';
+import '../screens/visitor_manual_entry.dart';
+import '../screens/send_otp_page.dart';
+import '../core/notifications_center.dart';
+import '../widgets/notification_bell.dart';
 
 const String baseUrl = AppConfig.baseUrl;
 final _secure = FlutterSecureStorage();
@@ -44,7 +48,6 @@ final Dio api = Dio(
   ),
 )..interceptors.add(AuthInterceptor());
 
-/// -------------------- DASHBOARD PAGE --------------------
 class DashboardPage extends StatelessWidget {
   final String role;
   const DashboardPage({super.key, required this.role});
@@ -89,8 +92,6 @@ class DashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
-    // Demo data; replace with API-backed values
     if (role == "ROLE_RESIDENCE") {
       return ListView(
         padding: const EdgeInsets.all(16),
@@ -124,7 +125,6 @@ class DashboardPage extends StatelessWidget {
   }
 }
 
-/// -------------------- MAIN SHELL --------------------
 class HomeShell extends StatefulWidget {
   final LoginType loginType;
   final String role;
@@ -142,17 +142,18 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
 
   final FlutterLocalNotificationsPlugin _localNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
+  // If still needed elsewhere
   int _notifCount = 0;
   final List<Map<String, String>> _notifications = [];
 
-  // Animated indicator controller for bottom bar
   late final AnimationController _indicatorController;
   late Animation<double> _indicatorAnim;
 
   @override
   void initState() {
     super.initState();
-    _indicatorController = AnimationController(vsync: this, duration: const Duration(milliseconds: 280));
+    _indicatorController =
+        AnimationController(vsync: this, duration: const Duration(milliseconds: 280));
     _indicatorAnim = CurvedAnimation(parent: _indicatorController, curve: Curves.easeOutCubic);
 
     _setupMenu();
@@ -173,7 +174,6 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
         _redirectToLogin();
         return;
       }
-
       final res = await api.get('/guard/auth/check-token');
       final data = res.data;
       if (data is Map && (data['expired'] == true || data['active'] == false)) {
@@ -190,7 +190,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     await _secure.deleteAll();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const SendOtpPage()),
+      MaterialPageRoute(builder: (_) => SendOtpPage()),
       (route) => false,
     );
   }
@@ -237,10 +237,12 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
   void _onMenuSelected(String value) async {
     switch (value) {
       case 'profile':
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile coming soon')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Profile coming soon')));
         break;
       case 'settings':
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings coming soon')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Settings coming soon')));
         break;
       case 'logout':
         _redirectToLogin();
@@ -248,11 +250,11 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     }
   }
 
-  /// ---------------- FCM SETUP ----------------
   Future<void> _setupFCM() async {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-    const AndroidInitializationSettings androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const AndroidInitializationSettings androidInit =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
     const InitializationSettings initSettings = InitializationSettings(android: androidInit);
     await _localNotificationsPlugin.initialize(initSettings);
 
@@ -263,18 +265,19 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     debugPrint("FCM Token: $token");
 
     FirebaseMessaging.onMessage.listen((m) {
-      _addNotification(m);
-      _showLocalNotification(m);
-    });
-  }
+      // Add to dropdown center
+      final title = m.notification?.title ?? 'Notification';
+      final body = m.notification?.body ?? '';
+      NotificationsCenter.add(AppNotification(title: title, body: body));
 
-  void _addNotification(RemoteMessage message) {
-    setState(() {
-      _notifications.insert(0, {
-        'title': message.notification?.title ?? 'Notification',
-        'body': message.notification?.body ?? '',
+      // Optional: maintain legacy counters if needed elsewhere
+      setState(() {
+        _notifications.insert(0, {'title': title, 'body': body});
+        _notifCount = _notifications.length;
       });
-      _notifCount = _notifications.length;
+
+      // Optional: also show a local banner
+      _showLocalNotification(m);
     });
   }
 
@@ -293,12 +296,8 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     );
   }
 
-  // ---------- Colorful NavigationBar ----------
-  // Build a colorful, animated NavigationBar with pill selection and gradient indicator
   Widget _buildColorfulNavBar(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
-    // Role-aware color palette
     final rolePrimary = widget.role == 'ROLE_GUARD'
         ? Colors.teal
         : widget.role == 'ROLE_RESIDENCE'
@@ -310,15 +309,14 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
             ? cs.tertiary
             : Colors.orange;
 
-    // Animate indicator on selection change
     _indicatorController.forward(from: 0);
 
     return NavigationBarTheme(
       data: NavigationBarThemeData(
         height: 78,
         elevation: 3,
-        backgroundColor: cs.surface, // keep surface to let colors pop
-        indicatorColor: Colors.transparent, // custom indicator below
+        backgroundColor: cs.surface,
+        indicatorColor: Colors.transparent,
         labelTextStyle: MaterialStateProperty.resolveWith((states) {
           final selected = states.contains(MaterialState.selected);
           return TextStyle(
@@ -336,7 +334,6 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
       ),
       child: Stack(
         children: [
-          // Gradient indicator bar at the top of NavigationBar
           Positioned(
             left: 0,
             right: 0,
@@ -357,7 +354,6 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
               ),
             ),
           ),
-          // The actual NavigationBar with colorful selected pills
           NavigationBar(
             selectedIndex: _index,
             onDestinationSelected: (i) => setState(() => _index = i),
@@ -398,26 +394,20 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
         appBar: AppBar(
           centerTitle: true,
           title: Image.asset('assets/logo.png', height: 28, fit: BoxFit.contain),
-          actions: [
-            PopupMenuButton<String>(
-              onSelected: _onMenuSelected,
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'profile', child: Text('Profile')),
-                PopupMenuItem(value: 'settings', child: Text('Settings')),
-                PopupMenuItem(value: 'logout', child: Text('Logout')),
-              ],
-            ),
+          actions: const [
+            // Notification dropdown in header
+            NotificationBell(),
+            SizedBox(width: 8),
+            // Existing menu
           ],
         ),
         body: IndexedStack(index: _index, children: _pages),
-        // Colorful bottom bar
         bottomNavigationBar: _buildColorfulNavBar(context),
       ),
     );
   }
 }
 
-// A rounded pill behind the selected icon for a colorful accent
 class _ColoredIconBadge extends StatelessWidget {
   final Widget icon;
   final bool selected;

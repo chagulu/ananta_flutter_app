@@ -1,462 +1,163 @@
+// File: lib/screens/admin/dashboard.dart
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:ananta_app/screens/residence_list_page.dart';
-import 'package:ananta_app/screens/visitor_list.dart';
-import 'package:ananta_app/screens/visitor_qr.dart';
-import 'package:ananta_app/screens/visitor_manual_entry.dart';
-import 'package:ananta_app/screens/send_otp_page.dart';
-import '../../config.dart';
-import '../../models/login_type.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import '../../firebase_options.dart';
-import 'package:firebase_core/firebase_core.dart';
-import '../admin/residence_register_page.dart';
 
-
-const String baseUrl = AppConfig.baseUrl;
-final _secure = FlutterSecureStorage();
-
-class AuthInterceptor extends Interceptor {
-  @override
-  void onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
-    final token = await _secure.read(key: 'access_token');
-    if (token != null && token.isNotEmpty) {
-      options.headers['Authorization'] = 'Bearer $token';
-    }
-    handler.next(options);
-  }
+class DashboardPage extends StatefulWidget {
+  const DashboardPage({super.key});
 
   @override
-  void onError(DioException err, ErrorInterceptorHandler handler) async {
-    if (err.response?.statusCode == 401) {
-      await _secure.deleteAll();
-    }
-    handler.next(err);
-  }
+  State<DashboardPage> createState() => _DashboardPageState();
 }
 
-final Dio api = Dio(
-  BaseOptions(
-    baseUrl: baseUrl,
-    connectTimeout: const Duration(seconds: 10),
-    receiveTimeout: const Duration(seconds: 20),
-    headers: {'Content-Type': 'application/json'},
-  ),
-)..interceptors.add(AuthInterceptor());
+class _DashboardPageState extends State<DashboardPage> {
+  final _secure = const FlutterSecureStorage();
+  late final Dio _dio;
 
-/// -------------------- DASHBOARD PAGE --------------------
-class AdminDashboard extends StatelessWidget {
-  final String role;
-  const AdminDashboard({super.key, required this.role});
-
-  Widget _statCard(BuildContext ctx, String title, String value, IconData icon, Color color) {
-    final cs = Theme.of(ctx).colorScheme;
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: cs.outlineVariant),
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        width: double.infinity,
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.14),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color),
-            ),
-            const SizedBox(width: 16),
-            Expanded(child: Text(title, style: Theme.of(ctx).textTheme.bodyLarge)),
-            Text(
-              value,
-              style: Theme.of(ctx).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: color,
-                  ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    if (role == "ROLE_RESIDENCE") {
-      return ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _statCard(context, "Pending requests", "2", Icons.pending_actions, cs.primary),
-          _statCard(context, "Total requests", "12", Icons.history, cs.tertiary),
-          _statCard(context, "Upcoming events", "2", Icons.event, cs.secondary),
-        ],
-      );
-    } else if (role == "ROLE_GUARD") {
-      return ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _statCard(context, "Today's visitors", "15", Icons.today, cs.primary),
-          _statCard(context, "Approved", "10", Icons.verified, Colors.green),
-          _statCard(context, "Rejected", "3", Icons.cancel, Colors.red),
-          _statCard(context, "Pending", "2", Icons.pending, cs.tertiary),
-        ],
-      );
-    } else {
-      return ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _statCard(context, "Total residences", "120", Icons.apartment, cs.primary),
-          _statCard(context, "Total guards", "8", Icons.security, cs.secondary),
-          _statCard(context, "Total visitors", "560", Icons.people, cs.tertiary),
-          _statCard(context, "Events posted", "6", Icons.event, Colors.orange),
-        ],
-      );
-    }
-  }
-}
-
-/// -------------------- HOME SHELL --------------------
-class HomeShell extends StatefulWidget {
-  final LoginType loginType;
-  final String role;
-  const HomeShell({super.key, required this.loginType, required this.role});
-
-  @override
-  State<HomeShell> createState() => _HomeShellState();
-}
-
-class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMixin {
-  int _index = 0;
-  late List<Widget> _pages;
-  late List<NavigationDestination> _destinations;
-  bool _checkingToken = true;
-
-  final FlutterLocalNotificationsPlugin _localNotificationsPlugin = FlutterLocalNotificationsPlugin();
-  int _notifCount = 0;
-  final List<Map<String, String>> _notifications = [];
-
-  late final AnimationController _indicatorController;
-  late Animation<double> _indicatorAnim;
+  bool _loading = true;
+  bool _error = false;
+  String _errorMessage = '';
+  Map<String, dynamic>? _response; // full response
 
   @override
   void initState() {
     super.initState();
-    _indicatorController = AnimationController(vsync: this, duration: const Duration(milliseconds: 280));
-    _indicatorAnim = CurvedAnimation(parent: _indicatorController, curve: Curves.easeOutCubic);
-
-    _setupMenu();
-    _checkTokenStatus();
-    _setupFCM();
+    _dio = Dio(BaseOptions(
+      // If using a global baseUrl via HomeShell/api, you can reuse that instead.
+      // For standalone operation, set emulator host or env base:
+      baseUrl: "http://10.0.2.2:8080",
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 15),
+      headers: {'Content-Type': 'application/json'},
+    ));
+    _fetch();
   }
 
-  @override
-  void dispose() {
-    _indicatorController.dispose();
-    super.dispose();
-  }
+  Future<void> _fetch() async {
+    setState(() {
+      _loading = true;
+      _error = false;
+      _errorMessage = '';
+    });
 
-  Future<void> _checkTokenStatus() async {
     try {
       final token = await _secure.read(key: 'access_token');
       if (token == null || token.isEmpty) {
-        _redirectToLogin();
-        return;
+        throw Exception('Not authenticated');
       }
 
-      final res = await api.get('/guard/auth/check-token');
-      final data = res.data;
-      if (data is Map && (data['expired'] == true || data['active'] == false)) {
-        _redirectToLogin();
+      final res = await _dio.get(
+        '/api/admin/dashboard',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+
+      if (res.statusCode == 200) {
+        final d = res.data;
+        if (d is Map<String, dynamic>) {
+          setState(() => _response = d);
+        } else {
+          setState(() => _response = {'data': {}});
+        }
+      } else {
+        throw Exception('Failed (${res.statusCode})');
       }
-    } catch (_) {
-      _redirectToLogin();
-    } finally {
-      if (mounted) setState(() => _checkingToken = false);
-    }
-  }
-
-  void _redirectToLogin() async {
-    await _secure.deleteAll();
-    if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const SendOtpPage()),
-      (route) => false,
-    );
-  }
-
-  void _setupMenu() {
-  if (widget.role == 'ROLE_GUARD') {
-    _pages = [
-      AdminDashboard(role: widget.role),
-      const ResidenceListPage(),
-      const VisitorListPage(loginType: LoginType.guard),
-      const GenerateQrPage(),
-      const ManualEntryPage(),
-    ];
-    _destinations = const [
-      NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
-      NavigationDestination(icon: Icon(Icons.apartment_outlined), selectedIcon: Icon(Icons.apartment), label: 'Residences'),
-      NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Visitors'),
-      NavigationDestination(icon: Icon(Icons.qr_code_2_outlined), selectedIcon: Icon(Icons.qr_code_2), label: 'QR'),
-      NavigationDestination(icon: Icon(Icons.playlist_add_outlined), selectedIcon: Icon(Icons.playlist_add), label: 'Manual'),
-    ];
-  } else if (widget.role == 'ROLE_RESIDENCE') {
-    _pages = [
-      AdminDashboard(role: widget.role),
-      const VisitorListPage(loginType: LoginType.residence),
-    ];
-    _destinations = const [
-      NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
-      NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Visitors'),
-    ];
-  } else if (widget.role == 'ROLE_ADMIN') {
-    _pages = [
-      AdminDashboard(role: widget.role),
-      const ResidenceListPage(),
-      const VisitorListPage(loginType: LoginType.guard),
-      const ResidenceRegisterPage(), // <-- Add this page
-    ];
-    _destinations = const [
-      NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
-      NavigationDestination(icon: Icon(Icons.apartment_outlined), selectedIcon: Icon(Icons.apartment), label: 'Residences'),
-      NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Visitors'),
-      NavigationDestination(icon: Icon(Icons.person_add_outlined), selectedIcon: Icon(Icons.person_add), label: 'Create'), // <-- label for new page
-    ];
-  } else {
-    // fallback for unknown roles
-    _pages = [
-      AdminDashboard(role: widget.role),
-      const ResidenceListPage(),
-      const VisitorListPage(loginType: LoginType.guard),
-      const ResidenceRegisterPage(),
-    ];
-    _destinations = const [
-      NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
-      NavigationDestination(icon: Icon(Icons.apartment_outlined), selectedIcon: Icon(Icons.apartment), label: 'Residences'),
-      NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Visitors'),
-      NavigationDestination(icon: Icon(Icons.person_add_outlined), selectedIcon: Icon(Icons.person_add), label: 'Create'),
-    ];
-  }
-
-  // Ensure index is in bounds
-  if (_index >= _destinations.length) _index = 0;
-}
-
-
-  void _onMenuSelected(String value) async {
-    switch (value) {
-      case 'profile':
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile coming soon')));
-        break;
-      case 'settings':
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings coming soon')));
-        break;
-      case 'logout':
-        _redirectToLogin();
-        break;
-    }
-  }
-
-  Future<void> _setupFCM() async {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-    const AndroidInitializationSettings androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings initSettings = InitializationSettings(android: androidInit);
-    await _localNotificationsPlugin.initialize(initSettings);
-
-    FirebaseMessaging messaging = FirebaseMessaging.instance;
-    await messaging.requestPermission(alert: true, badge: true, sound: true);
-
-    final token = await messaging.getToken();
-    debugPrint("FCM Token: $token");
-
-    FirebaseMessaging.onMessage.listen((m) {
-      _addNotification(m);
-      _showLocalNotification(m);
-    });
-  }
-
-  void _addNotification(RemoteMessage message) {
-    setState(() {
-      _notifications.insert(0, {
-        'title': message.notification?.title ?? 'Notification',
-        'body': message.notification?.body ?? '',
+    } on DioException catch (e) {
+      setState(() {
+        _error = true;
+        _errorMessage = e.response?.data?.toString() ?? e.message ?? "Unknown error";
       });
-      _notifCount = _notifications.length;
-    });
+    } catch (e) {
+      setState(() {
+        _error = true;
+        _errorMessage = e.toString();
+      });
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
-  Future<void> _showLocalNotification(RemoteMessage message) async {
-    const androidDetails = AndroidNotificationDetails(
-      'default_channel',
-      'Default',
-      importance: Importance.max,
-      priority: Priority.high,
-    );
-    await _localNotificationsPlugin.show(
-      message.hashCode,
-      message.notification?.title ?? "Notification",
-      message.notification?.body ?? "",
-      const NotificationDetails(android: androidDetails),
-    );
-  }
-
-  Widget _buildColorfulNavBar(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final rolePrimary = widget.role == 'ROLE_GUARD'
-        ? Colors.teal
-        : widget.role == 'ROLE_RESIDENCE'
-            ? cs.primary
-            : Colors.purple;
-    final roleSecondary = widget.role == 'ROLE_GUARD'
-        ? Colors.indigo
-        : widget.role == 'ROLE_RESIDENCE'
-            ? cs.tertiary
-            : Colors.orange;
-
-    _indicatorController.forward(from: 0);
-
-    return NavigationBarTheme(
-      data: NavigationBarThemeData(
-        height: 78,
-        elevation: 3,
-        backgroundColor: cs.surface,
-        indicatorColor: Colors.transparent,
-        labelTextStyle: MaterialStateProperty.resolveWith((states) {
-          final selected = states.contains(MaterialState.selected);
-          return TextStyle(
-            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-            color: selected ? rolePrimary : cs.onSurfaceVariant,
-          );
-        }),
-        iconTheme: MaterialStateProperty.resolveWith((states) {
-          final selected = states.contains(MaterialState.selected);
-          return IconThemeData(
-            color: selected ? rolePrimary : cs.onSurfaceVariant,
-            size: selected ? 26 : 24,
-          );
-        }),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            child: SizeTransition(
-              sizeFactor: _indicatorAnim,
-              axis: Axis.vertical,
-              axisAlignment: -1,
-              child: Container(
-                height: 3,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [rolePrimary, roleSecondary],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
+  @override
+  Widget build(BuildContext context) {
+    final appBarTitle = 'Admin Dashboard';
+    return Scaffold(
+      appBar: AppBar(title: Text(appBarTitle)),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error
+              ? Center(
+                  child: Text(
+                    "Error: $_errorMessage",
+                    style: const TextStyle(color: Colors.red),
                   ),
+                )
+              : _buildBody(context),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    final payload = (_response?['data'] is Map<String, dynamic>)
+        ? _response!['data'] as Map<String, dynamic>
+        : <String, dynamic>{};
+
+    final today = payload['todayVisitors'];
+    final total = payload['totalVisitors'];
+    final approved = payload['approved'];
+    final rejected = payload['rejected'];
+    final pending = payload['pending'];
+
+    final events = (payload['events'] is List) ? (payload['events'] as List) : const [];
+
+    return RefreshIndicator(
+      onRefresh: _fetch,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('Overview', style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: 16),
+
+          _statCard('Today visitors', (today ?? 0).toString(), Icons.today, Colors.indigo),
+          _statCard('Total visitors', (total ?? 0).toString(), Icons.people, Colors.blue),
+          _statCard('Approved', (approved ?? 0).toString(), Icons.check_circle, Colors.green),
+          _statCard('Rejected', (rejected ?? 0).toString(), Icons.cancel, Colors.red),
+          _statCard('Pending', (pending ?? 0).toString(), Icons.hourglass_top, Colors.orange),
+
+          const SizedBox(height: 24),
+          Text('Upcoming events', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
+
+          if (events.isEmpty)
+            const Text("No upcoming events"),
+          for (var e in events)
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.event),
+                title: Text((e is Map && e['title'] != null) ? e['title'].toString() : ''),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (e is Map && e['description'] != null)
+                      Text(e['description'].toString()),
+                    if (e is Map && e['date'] != null)
+                      Text(e['date'].toString()), // ISO string; format if needed
+                  ],
                 ),
               ),
             ),
-          ),
-          NavigationBar(
-            selectedIndex: _index,
-            onDestinationSelected: (i) => setState(() => _index = i),
-            destinations: _destinations.map((d) {
-              final idx = _destinations.indexOf(d);
-              final selected = idx == _index;
-              return NavigationDestination(
-                icon: _ColoredIconBadge(
-                  icon: d.icon,
-                  selected: selected,
-                  rolePrimary: rolePrimary,
-                  cs: cs,
-                ),
-                selectedIcon: _ColoredIconBadge(
-                  icon: d.selectedIcon ?? d.icon,
-                  selected: true,
-                  rolePrimary: rolePrimary,
-                  cs: cs,
-                ),
-                label: d.label,
-              );
-            }).toList(),
-          ),
         ],
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_checkingToken) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
-    return WillPopScope(
-      onWillPop: () async => false,
-      child: Scaffold(
-        appBar: AppBar(
-          centerTitle: true,
-          title: Image.asset('assets/logo.png', height: 28, fit: BoxFit.contain),
-          actions: [
-            PopupMenuButton<String>(
-              onSelected: _onMenuSelected,
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'profile', child: Text('Profile')),
-                PopupMenuItem(value: 'settings', child: Text('Settings')),
-                PopupMenuItem(value: 'logout', child: Text('Logout')),
-              ],
-            ),
-          ],
+  Widget _statCard(String title, String value, IconData icon, Color color) {
+    return Card(
+      child: ListTile(
+        leading: Icon(icon, color: color, size: 32),
+        title: Text(title),
+        trailing: Text(
+          value,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
-        body: IndexedStack(index: _index, children: _pages),
-        bottomNavigationBar: _buildColorfulNavBar(context),
       ),
-    );
-  }
-}
-
-class _ColoredIconBadge extends StatelessWidget {
-  final Widget icon;
-  final bool selected;
-  final Color rolePrimary;
-  final ColorScheme cs;
-
-  const _ColoredIconBadge({
-    required this.icon,
-    required this.selected,
-    required this.rolePrimary,
-    required this.cs,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (!selected) return icon;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: rolePrimary.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: rolePrimary.withOpacity(0.36)),
-        boxShadow: [
-          BoxShadow(
-            color: rolePrimary.withOpacity(0.18),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: icon,
     );
   }
 }

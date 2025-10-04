@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// A unified dashboard for Resident & Guard users.
-/// - Calls /api/resident/dashboard for residents
-/// - Calls /api/guard/dashboard for guards
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
@@ -19,14 +16,14 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _loading = true;
   bool _error = false;
   String _errorMessage = '';
-  Map<String, dynamic>? _data;
+  Map<String, dynamic>? _response;
   String? _roleFromStorage;
 
   @override
   void initState() {
     super.initState();
     _dio = Dio(BaseOptions(
-      baseUrl: "http://10.0.2.2:8080", // ✅ change for your backend host
+      baseUrl: "http://10.0.2.2:8080",
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 15),
     ));
@@ -44,31 +41,35 @@ class _DashboardPageState extends State<DashboardPage> {
       final token = await _secure.read(key: 'access_token');
       final storedRole = await _secure.read(key: 'user_role');
       _roleFromStorage = storedRole;
+      debugPrint('Dashboard roleFromStorage=$_roleFromStorage'); // debug
 
       if (token == null || token.isEmpty) {
         throw Exception('Not authenticated');
       }
 
-      // ✅ Decide endpoint based on role
+      final roleStr = (_roleFromStorage ?? '').toUpperCase();
       String endpoint = '/api/dashboard';
-      if ((_roleFromStorage ?? '').toUpperCase().contains('RESIDENT') ||
-          (_roleFromStorage ?? '').toUpperCase().contains('RESIDENCE')) {
+      if (roleStr.contains('RESIDENT') || roleStr.contains('RESIDENCE')) {
         endpoint = '/api/resident/dashboard';
-      } else if ((_roleFromStorage ?? '').toUpperCase().contains('GUARD')) {
+      } else if (roleStr.contains('GUARD')) {
         endpoint = '/api/guard/dashboard';
       }
+      debugPrint('Dashboard calling endpoint=$endpoint'); // debug
 
       final res = await _dio.get(
         endpoint,
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
 
+      debugPrint('Dashboard status=${res.statusCode}'); // debug
+      debugPrint('Dashboard raw=${res.data}'); // debug
+
       if (res.statusCode == 200) {
         final d = res.data;
         if (d is Map<String, dynamic>) {
-          setState(() => _data = d);
+          setState(() => _response = d);
         } else {
-          setState(() => _data = {'role': _roleFromStorage ?? 'UNKNOWN'});
+          setState(() => _response = {'data': {}, 'role': _roleFromStorage ?? 'UNKNOWN'});
         }
       } else {
         throw Exception('Failed to load dashboard (${res.statusCode})');
@@ -76,8 +77,7 @@ class _DashboardPageState extends State<DashboardPage> {
     } on DioException catch (e) {
       setState(() {
         _error = true;
-        _errorMessage =
-            e.response?.data?.toString() ?? e.message ?? "Unknown error occurred";
+        _errorMessage = e.response?.data?.toString() ?? e.message ?? "Unknown error occurred";
       });
     } catch (e) {
       setState(() {
@@ -91,16 +91,12 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final title = (_roleFromStorage ?? '').toUpperCase() == 'ROLE_GUARD'
+        ? 'Guard Dashboard'
+        : 'Resident Dashboard';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          _roleFromStorage?.toUpperCase() == 'ROLE_GUARD'
-              ? 'Guard Dashboard'
-              : 'Resident Dashboard',
-        ),
-      ),
+      appBar: AppBar(title: Text(title)),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error
@@ -115,41 +111,73 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildDashboard(BuildContext context) {
-    if (_data == null) {
-      return const Center(child: Text("No data available"));
-    }
+    final payload = (_response?['data'] is Map<String, dynamic>)
+        ? _response!['data'] as Map<String, dynamic>
+        : <String, dynamic>{};
 
-    final data = _data?['data'] ?? {};
-    final events = (data['events'] ?? []) as List;
+    final roleStr = (_roleFromStorage ?? '').toUpperCase();
+    final isGuard = roleStr.contains('GUARD');
+    final isResident = roleStr.contains('RESIDENT') || roleStr.contains('RESIDENCE');
+
+    debugPrint('Dashboard isResident=$isResident isGuard=$isGuard'); // debug
+    debugPrint('Dashboard payload keys=${payload.keys.toList()}'); // debug
+
+    // Resident fields
+    final todayVisitors = payload['todayVisitors'];
+    final totalVisitors = payload['totalVisitors'];
+    final approved = payload['approved'];
+    final pending = payload['pending'];
+    final rejected = payload['rejected'];
+    final building = payload['buildingNumber']?.toString();
+    final flat = payload['flatNumber']?.toString();
+
+    // Guard fields
+    final pendingVisitors = payload['pendingVisitors'];
+
+    // Common events
+    final events = (payload['events'] is List) ? (payload['events'] as List) : const [];
 
     return RefreshIndicator(
       onRefresh: _loadAndFetch,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text(
-            'Welcome, ${_roleFromStorage ?? "User"}',
-            style: Theme.of(context).textTheme.headlineSmall,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Welcome, ${_roleFromStorage ?? "User"}',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+              ),
+              if (isResident && building != null && building.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Chip(label: Text('Building: $building')),
+                ),
+              if (isResident && flat != null && flat.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Chip(label: Text('Flat: $flat')),
+                ),
+            ],
           ),
           const SizedBox(height: 16),
 
-          // ✅ Dashboard cards
-          if (data['totalVisitors'] != null)
-            _statCard('Total Visitors', data['totalVisitors'].toString(),
-                Icons.people, Colors.blue),
-          if (data['approved'] != null)
-            _statCard('Approved Visitors', data['approved'].toString(),
-                Icons.check_circle, Colors.green),
-          if (data['pending'] != null)
-            _statCard('Pending Requests', data['pending'].toString(),
-                Icons.hourglass_top, Colors.orange),
-          if (data['rejected'] != null)
-            _statCard('Rejected Visitors', data['rejected'].toString(),
-                Icons.cancel, Colors.red),
+          if (isResident) ...[
+            _statCard('Today visitors', (todayVisitors ?? 0).toString(), Icons.today, Colors.indigo),
+            _statCard('Total visitors', (totalVisitors ?? 0).toString(), Icons.people, Colors.blue),
+            _statCard('Approved', (approved ?? 0).toString(), Icons.check_circle, Colors.green),
+            _statCard('Rejected', (rejected ?? 0).toString(), Icons.cancel, Colors.red),
+            _statCard('Pending', (pending ?? 0).toString(), Icons.hourglass_top, Colors.orange),
+          ],
+
+          if (isGuard) ...[
+            _statCard('Pending visitors', (pendingVisitors ?? 0).toString(), Icons.pending_actions, Colors.orange),
+          ],
 
           const SizedBox(height: 24),
-          Text('Upcoming Events',
-              style: Theme.of(context).textTheme.titleMedium),
+          Text('Upcoming events', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
 
           if (events.isEmpty)
@@ -158,8 +186,8 @@ class _DashboardPageState extends State<DashboardPage> {
             Card(
               child: ListTile(
                 leading: const Icon(Icons.event),
-                title: Text(e['title'] ?? ''),
-                subtitle: Text(e['date'] ?? ''),
+                title: Text((e is Map && e['title'] != null) ? e['title'].toString() : ''),
+                subtitle: Text((e is Map && e['date'] != null) ? e['date'].toString() : ''),
               ),
             ),
         ],
@@ -167,8 +195,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _statCard(
-      String title, String value, IconData icon, Color color) {
+  Widget _statCard(String title, String value, IconData icon, Color color) {
     return Card(
       child: ListTile(
         leading: Icon(icon, color: color, size: 32),

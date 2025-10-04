@@ -16,8 +16,11 @@ import '../screens/visitor_manual_entry.dart';
 import '../screens/send_otp_page.dart';
 import '../core/notifications_center.dart';
 import '../widgets/notification_bell.dart';
-import 'admin/residence_register_page.dart'; // <-- new resident create page
+import 'admin/residence_register_page.dart'; // create resident for admin
 
+// Use distinct aliases
+import '../screens/dashboard.dart' as dyn;            // resident/guard dynamic dashboard
+import '../screens/admin/admin_dashboard.dart' as adyn; // admin-only dynamic dashboard
 
 const String baseUrl = AppConfig.baseUrl;
 final _secure = FlutterSecureStorage();
@@ -50,8 +53,9 @@ final Dio api = Dio(
   ),
 )..interceptors.add(AuthInterceptor());
 
+// Legacy placeholder (kept in case other code references it)
 class DashboardPage extends StatelessWidget {
-  final String role;
+  final String role; // canonical: ROLE_RESIDENCE | ROLE_GUARD | ROLE_ADMIN
   const DashboardPage({super.key, required this.role});
 
   Widget _statCard(BuildContext ctx, String title, String value, IconData icon, Color color) {
@@ -129,7 +133,7 @@ class DashboardPage extends StatelessWidget {
 
 class HomeShell extends StatefulWidget {
   final LoginType loginType;
-  final String role;
+  final String role; // raw role from login result
   const HomeShell({super.key, required this.loginType, required this.role});
 
   @override
@@ -144,23 +148,52 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
 
   final FlutterLocalNotificationsPlugin _localNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
-  // If still needed elsewhere
   int _notifCount = 0;
   final List<Map<String, String>> _notifications = [];
 
   late final AnimationController _indicatorController;
   late Animation<double> _indicatorAnim;
 
+  String _resolvedRole = 'ROLE_GUARD'; // canonical role
+
   @override
   void initState() {
     super.initState();
-    _indicatorController =
-        AnimationController(vsync: this, duration: const Duration(milliseconds: 280));
+    _indicatorController = AnimationController(vsync: this, duration: const Duration(milliseconds: 280));
     _indicatorAnim = CurvedAnimation(parent: _indicatorController, curve: Curves.easeOutCubic);
 
-    _setupMenu();
-    _checkTokenStatus();
-    _setupFCM();
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    await _resolveRoleFromStorage();
+    _setupMenu(); // uses _resolvedRole
+    await _checkTokenStatus();
+    await _setupFCM();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _resolveRoleFromStorage() async {
+    final storedRole = await _secure.read(key: 'user_role');
+    final incomingRole = widget.role;
+    final normalized = _normalizeRole(storedRole ?? incomingRole);
+    _resolvedRole = normalized;
+    await _secure.write(key: 'user_role', value: normalized);
+    debugPrint('HomeShell role(incoming)=$incomingRole stored=$storedRole resolved=$_resolvedRole');
+  }
+
+  String _normalizeRole(String raw) {
+    final s = (raw).trim().toUpperCase();
+    if (s == 'ROLE_RESIDENCE' || s == 'RESIDENCE' || s == 'RESIDENT' || s.contains('RESIDENT')) {
+      return 'ROLE_RESIDENCE';
+    }
+    if (s == 'ROLE_GUARD' || s == 'GUARD' || s.contains('GUARD')) {
+      return 'ROLE_GUARD';
+    }
+    if (s == 'ROLE_ADMIN' || s == 'ADMIN' || s.contains('ADMIN')) {
+      return 'ROLE_ADMIN';
+    }
+    return 'ROLE_GUARD';
   }
 
   @override
@@ -197,79 +230,71 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     );
   }
 
-  // import at top:
-// import 'admin/residence_register_page.dart';
+  void _setupMenu() {
+    debugPrint('HomeShell building menu for role=$_resolvedRole');
 
-void _setupMenu() {
-  debugPrint('HomeShell role=${widget.role}'); // verify role
-  if (widget.role == 'ROLE_GUARD') {
-    _pages = [
-      DashboardPage(role: widget.role),
-      const ResidenceListPage(),
-      const VisitorListPage(loginType: LoginType.guard),
-      const GenerateQrPage(),
-      const ManualEntryPage(),
-    ];
-    _destinations = const [
-      NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
-      NavigationDestination(icon: Icon(Icons.apartment_outlined), selectedIcon: Icon(Icons.apartment), label: 'Residences'),
-      NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Visitors'),
-      NavigationDestination(icon: Icon(Icons.qr_code_2_outlined), selectedIcon: Icon(Icons.qr_code_2), label: 'QR'),
-      NavigationDestination(icon: Icon(Icons.playlist_add_outlined), selectedIcon: Icon(Icons.playlist_add), label: 'Manual'),
-    ];
-  } else if (widget.role == 'ROLE_RESIDENCE') {
-    _pages = [
-      DashboardPage(role: widget.role),
-      const VisitorListPage(loginType: LoginType.residence),
-    ];
-    _destinations = const [
-      NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
-      NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Visitors'),
-    ];
-  } else if (widget.role == 'ROLE_ADMIN') {
-    // Explicit admin case
-    _pages = [
-      DashboardPage(role: widget.role),
-      const ResidenceListPage(),
-      const VisitorListPage(loginType: LoginType.guard),
-      const ResidenceRegisterPage(), // Create Resident
-    ];
-    _destinations = const [
-      NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
-      NavigationDestination(icon: Icon(Icons.apartment_outlined), selectedIcon: Icon(Icons.apartment), label: 'Residences'),
-      NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Visitors'),
-      NavigationDestination(icon: Icon(Icons.person_add_outlined), selectedIcon: Icon(Icons.person_add), label: 'Create'),
-    ];
-  } else {
-    // Fallback: treat unknown roles as admin or guard; pick one explicitly
-    _pages = [
-      DashboardPage(role: widget.role),
-      const ResidenceListPage(),
-      const VisitorListPage(loginType: LoginType.guard),
-      const ResidenceRegisterPage(),
-    ];
-    _destinations = const [
-      NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
-      NavigationDestination(icon: Icon(Icons.apartment_outlined), selectedIcon: Icon(Icons.apartment), label: 'Residences'),
-      NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Visitors'),
-      NavigationDestination(icon: Icon(Icons.person_add_outlined), selectedIcon: Icon(Icons.person_add), label: 'Create'),
-    ];
+    if (_resolvedRole == 'ROLE_GUARD') {
+      _pages = [
+        const dyn.DashboardPage(), // dynamic guard dashboard (/api/guard/dashboard)
+        const ResidenceListPage(),
+        const VisitorListPage(loginType: LoginType.guard),
+        const GenerateQrPage(),
+        const ManualEntryPage(),
+      ];
+      _destinations = const [
+        NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
+        NavigationDestination(icon: Icon(Icons.apartment_outlined), selectedIcon: Icon(Icons.apartment), label: 'Residences'),
+        NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Visitors'),
+        NavigationDestination(icon: Icon(Icons.qr_code_2_outlined), selectedIcon: Icon(Icons.qr_code_2), label: 'QR'),
+        NavigationDestination(icon: Icon(Icons.playlist_add_outlined), selectedIcon: Icon(Icons.playlist_add), label: 'Manual'),
+      ];
+    } else if (_resolvedRole == 'ROLE_RESIDENCE') {
+      _pages = [
+        const dyn.DashboardPage(), // dynamic resident dashboard (/api/resident/dashboard)
+        const VisitorListPage(loginType: LoginType.residence),
+      ];
+      _destinations = const [
+        NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
+        NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Visitors'),
+      ];
+    } else if (_resolvedRole == 'ROLE_ADMIN') {
+      _pages = [
+        const adyn.DashboardPage(), // dynamic admin-only dashboard (/api/admin/dashboard)
+        const ResidenceListPage(),
+        const VisitorListPage(loginType: LoginType.guard),
+        const ResidenceRegisterPage(), // Register Resident
+      ];
+      _destinations = const [
+        NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
+        NavigationDestination(icon: Icon(Icons.apartment_outlined), selectedIcon: Icon(Icons.apartment), label: 'Residences'),
+        NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Visitors'),
+        NavigationDestination(icon: Icon(Icons.person_add_outlined), selectedIcon: Icon(Icons.person_add), label: 'Create'),
+      ];
+    } else {
+      _pages = [
+        const dyn.DashboardPage(),
+        const ResidenceListPage(),
+        const VisitorListPage(loginType: LoginType.guard),
+        const ResidenceRegisterPage(),
+      ];
+      _destinations = const [
+        NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
+        NavigationDestination(icon: Icon(Icons.apartment_outlined), selectedIcon: Icon(Icons.apartment), label: 'Residences'),
+        NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Visitors'),
+        NavigationDestination(icon: Icon(Icons.person_add_outlined), selectedIcon: Icon(Icons.person_add), label: 'Create'),
+      ];
+    }
+
+    if (_index >= _destinations.length) _index = 0;
   }
-  // Ensure index is in bounds after menu changes
-  if (_index >= _destinations.length) _index = 0;
-}
-
-
 
   void _onMenuSelected(String value) async {
     switch (value) {
       case 'profile':
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Profile coming soon')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile coming soon')));
         break;
       case 'settings':
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Settings coming soon')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings coming soon')));
         break;
       case 'logout':
         _redirectToLogin();
@@ -280,8 +305,7 @@ void _setupMenu() {
   Future<void> _setupFCM() async {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-    const AndroidInitializationSettings androidInit =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const AndroidInitializationSettings androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const InitializationSettings initSettings = InitializationSettings(android: androidInit);
     await _localNotificationsPlugin.initialize(initSettings);
 
@@ -292,18 +316,15 @@ void _setupMenu() {
     debugPrint("FCM Token: $token");
 
     FirebaseMessaging.onMessage.listen((m) {
-      // Add to dropdown center
       final title = m.notification?.title ?? 'Notification';
       final body = m.notification?.body ?? '';
       NotificationsCenter.add(AppNotification(title: title, body: body));
 
-      // Optional: maintain legacy counters if needed elsewhere
       setState(() {
         _notifications.insert(0, {'title': title, 'body': body});
         _notifCount = _notifications.length;
       });
 
-      // Optional: also show a local banner
       _showLocalNotification(m);
     });
   }
@@ -325,14 +346,14 @@ void _setupMenu() {
 
   Widget _buildColorfulNavBar(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final rolePrimary = widget.role == 'ROLE_GUARD'
+    final rolePrimary = _resolvedRole == 'ROLE_GUARD'
         ? Colors.teal
-        : widget.role == 'ROLE_RESIDENCE'
+        : _resolvedRole == 'ROLE_RESIDENCE'
             ? cs.primary
             : Colors.purple;
-    final roleSecondary = widget.role == 'ROLE_GUARD'
+    final roleSecondary = _resolvedRole == 'ROLE_GUARD'
         ? Colors.indigo
-        : widget.role == 'ROLE_RESIDENCE'
+        : _resolvedRole == 'ROLE_RESIDENCE'
             ? cs.tertiary
             : Colors.orange;
 
@@ -419,30 +440,23 @@ void _setupMenu() {
       onWillPop: () async => false,
       child: Scaffold(
         appBar: AppBar(
-  centerTitle: true,
-  title: Image.asset('assets/logo.png', height: 28, fit: BoxFit.contain),
-  actions: [
-    // Notification dropdown (bell)
-    const NotificationBell(), // keep this first so badge stays near edge
-
-    // Spacing
-    const SizedBox(width: 8),
-
-    // Three-dot overflow menu restored
-    PopupMenuButton<String>(
-      tooltip: 'Menu',
-      onSelected: _onMenuSelected,
-      itemBuilder: (_) => const [
-        PopupMenuItem(value: 'profile', child: Text('Profile')),
-        PopupMenuItem(value: 'settings', child: Text('Settings')),
-        PopupMenuItem(value: 'logout', child: Text('Logout')),
-      ],
-    ),
-
-    // Right padding
-    const SizedBox(width: 4),
-  ],
-),
+          centerTitle: true,
+          title: Image.asset('assets/logo.png', height: 28, fit: BoxFit.contain),
+          actions: [
+            const NotificationBell(),
+            const SizedBox(width: 8),
+            PopupMenuButton<String>(
+              tooltip: 'Menu',
+              onSelected: _onMenuSelected,
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'profile', child: Text('Profile')),
+                PopupMenuItem(value: 'settings', child: Text('Settings')),
+                PopupMenuItem(value: 'logout', child: Text('Logout')),
+              ],
+            ),
+            const SizedBox(width: 4),
+          ],
+        ),
         body: IndexedStack(index: _index, children: _pages),
         bottomNavigationBar: _buildColorfulNavBar(context),
       ),

@@ -1,4 +1,5 @@
 // File: lib/screens/admin/dashboard.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -10,7 +11,7 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserver {
   final _secure = const FlutterSecureStorage();
   late final Dio _dio;
 
@@ -19,18 +20,42 @@ class _DashboardPageState extends State<DashboardPage> {
   String _errorMessage = '';
   Map<String, dynamic>? _response; // full response
 
+  Timer? _autoTimer; // auto-refresh timer
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _dio = Dio(BaseOptions(
-      // If using a global baseUrl via HomeShell/api, you can reuse that instead.
-      // For standalone operation, set emulator host or env base:
       baseUrl: "http://10.0.2.2:8080",
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 15),
       headers: {'Content-Type': 'application/json'},
     ));
     _fetch();
+    _startAutoRefresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _autoTimer?.cancel();
+    super.dispose();
+  }
+
+  // Refresh when returning to foreground
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _fetch();
+    }
+  }
+
+  void _startAutoRefresh() {
+    _autoTimer?.cancel();
+    _autoTimer = Timer.periodic(const Duration(minutes: 30), (_) {
+      if (mounted) _fetch();
+    });
   }
 
   Future<void> _fetch() async {
@@ -137,8 +162,8 @@ class _DashboardPageState extends State<DashboardPage> {
                   children: [
                     if (e is Map && e['description'] != null)
                       Text(e['description'].toString()),
-                    if (e is Map && e['date'] != null)
-                      Text(e['date'].toString()), // ISO string; format if needed
+                    if (e is Map && (e['date'] ?? e['eventDate']) != null)
+                      Text((e['date'] ?? e['eventDate']).toString()),
                   ],
                 ),
               ),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -9,7 +10,7 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserver {
   final FlutterSecureStorage _secure = const FlutterSecureStorage();
   late final Dio _dio;
 
@@ -19,15 +20,41 @@ class _DashboardPageState extends State<DashboardPage> {
   Map<String, dynamic>? _response;
   String? _roleFromStorage;
 
+  Timer? _autoTimer; // auto-refresh timer
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _dio = Dio(BaseOptions(
       baseUrl: "http://10.0.2.2:8080",
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 15),
     ));
     _loadAndFetch();
+    _startAutoRefresh(); // start periodic refresh
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _autoTimer?.cancel();
+    super.dispose();
+  }
+
+  // Refresh when app returns to foreground
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadAndFetch();
+    }
+  }
+
+  void _startAutoRefresh() {
+    _autoTimer?.cancel();
+    _autoTimer = Timer.periodic(const Duration(minutes: 30), (_) {
+      if (mounted) _loadAndFetch();
+    });
   }
 
   Future<void> _loadAndFetch() async {
@@ -41,7 +68,7 @@ class _DashboardPageState extends State<DashboardPage> {
       final token = await _secure.read(key: 'access_token');
       final storedRole = await _secure.read(key: 'user_role');
       _roleFromStorage = storedRole;
-      debugPrint('Dashboard roleFromStorage=$_roleFromStorage'); // debug
+      debugPrint('Dashboard roleFromStorage=$_roleFromStorage');
 
       if (token == null || token.isEmpty) {
         throw Exception('Not authenticated');
@@ -53,16 +80,18 @@ class _DashboardPageState extends State<DashboardPage> {
         endpoint = '/api/resident/dashboard';
       } else if (roleStr.contains('GUARD')) {
         endpoint = '/api/guard/dashboard';
+      } else if (roleStr.contains('ADMIN')) {
+        endpoint = '/api/admin/dashboard';
       }
-      debugPrint('Dashboard calling endpoint=$endpoint'); // debug
+      debugPrint('Dashboard calling endpoint=$endpoint');
 
       final res = await _dio.get(
         endpoint,
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
 
-      debugPrint('Dashboard status=${res.statusCode}'); // debug
-      debugPrint('Dashboard raw=${res.data}'); // debug
+      debugPrint('Dashboard status=${res.statusCode}');
+      debugPrint('Dashboard raw=${res.data}');
 
       if (res.statusCode == 200) {
         final d = res.data;
@@ -93,7 +122,9 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget build(BuildContext context) {
     final title = (_roleFromStorage ?? '').toUpperCase() == 'ROLE_GUARD'
         ? 'Guard Dashboard'
-        : 'Resident Dashboard';
+        : (_roleFromStorage ?? '').toUpperCase() == 'ROLE_ADMIN'
+            ? 'Admin Dashboard'
+            : 'Resident Dashboard';
 
     return Scaffold(
       appBar: AppBar(title: Text(title)),
@@ -119,10 +150,6 @@ class _DashboardPageState extends State<DashboardPage> {
     final isGuard = roleStr.contains('GUARD');
     final isResident = roleStr.contains('RESIDENT') || roleStr.contains('RESIDENCE');
 
-    debugPrint('Dashboard isResident=$isResident isGuard=$isGuard'); // debug
-    debugPrint('Dashboard payload keys=${payload.keys.toList()}'); // debug
-
-    // Resident fields
     final todayVisitors = payload['todayVisitors'];
     final totalVisitors = payload['totalVisitors'];
     final approved = payload['approved'];
@@ -131,10 +158,8 @@ class _DashboardPageState extends State<DashboardPage> {
     final building = payload['buildingNumber']?.toString();
     final flat = payload['flatNumber']?.toString();
 
-    // Guard fields
     final pendingVisitors = payload['pendingVisitors'];
 
-    // Common events
     final events = (payload['events'] is List) ? (payload['events'] as List) : const [];
 
     return RefreshIndicator(
@@ -187,7 +212,9 @@ class _DashboardPageState extends State<DashboardPage> {
               child: ListTile(
                 leading: const Icon(Icons.event),
                 title: Text((e is Map && e['title'] != null) ? e['title'].toString() : ''),
-                subtitle: Text((e is Map && e['date'] != null) ? e['date'].toString() : ''),
+                subtitle: Text((e is Map && (e['date'] ?? e['eventDate']) != null)
+                    ? (e['date'] ?? e['eventDate']).toString()
+                    : ''),
               ),
             ),
         ],

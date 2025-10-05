@@ -1,3 +1,4 @@
+// File: lib/screens/visitor_list.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
@@ -31,7 +32,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
   String? _selectedBuilding;
   String? _selectedStatus;
 
-  // Options aligned with your patterns
+  // Options
   static const List<String> kFlatOptions = <String>[
     'A1','A2','B1','B2','C1','C2','D1','D2','E1','E2',
   ];
@@ -44,6 +45,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
     DropdownMenuItem(value: 'REJECTED', child: Text('Rejected')),
   ];
 
+  // Endpoint: guard has dedicated path; residence/admin use generic
   String get _endpoint => widget.loginType == LoginType.guard
       ? '/api/visitor/guard'
       : '/api/visitor';
@@ -93,7 +95,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
     setState(() => _loading = true);
 
     try {
-      // Validate paired dropdowns similar to reference page logic:
+      // Paired validation: if one is selected, require the other
       final invalidPair = (_selectedFlat != null && _selectedBuilding == null) ||
                           (_selectedFlat == null && _selectedBuilding != null);
       if (invalidPair) {
@@ -106,7 +108,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
         return;
       }
 
-      // Build query map without nulls/empties (consistent with reference)
+      // Query parameters
       final qp = <String, dynamic>{
         'page': _page,
         'size': _size,
@@ -198,7 +200,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
         SnackBar(content: Text('${action[0].toUpperCase()}${action.substring(1)}d successfully')),
       );
       await _fetch(reset: true);
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${action[0].toUpperCase()}${action.substring(1)} failed')),
@@ -216,7 +218,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
     }
   }
 
-  // Filter UI replicated from reference design
+  // Filters
   Widget _buildFilter() {
     return Card(
       elevation: 4,
@@ -322,9 +324,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
                   ),
                 ),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: Container(), // spacer to keep grid consistent
-                ),
+                Expanded(child: Container()),
               ],
             ),
             const SizedBox(height: 12),
@@ -482,9 +482,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
 
   @override
   Widget build(BuildContext context) {
-    // Single vertical scroll: filters + list in one column inside a scroll view
     return Scaffold(
-      //appBar: AppBar(title: const Text('Visitors')),
       body: RefreshIndicator(
         onRefresh: () => _fetch(reset: true),
         child: SingleChildScrollView(
@@ -530,7 +528,6 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
                   itemCount: _items.length + (_more ? 1 : 0),
                   itemBuilder: (context, index) {
                     if (index >= _items.length) {
-                      // bottom spinner to fetch more
                       _loadMore();
                       return const Center(
                         child: Padding(

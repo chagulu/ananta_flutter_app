@@ -6,8 +6,6 @@ import 'package:ananta_app/screens/home_shell.dart' show api;
 import 'event_form_page.dart';
 import '../event_view_page.dart';
 
-
-
 class EventListPage extends StatefulWidget {
   const EventListPage({super.key});
 
@@ -35,14 +33,9 @@ class _EventListPageState extends State<EventListPage> {
       _errorMessage = '';
     });
     try {
-      // Admin listing (authorized)
-      final token = await _secure.read(key: 'access_token');
-      final res = await api.get(
-        '/api/admin/events',
-        options: Options(headers: {
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-        }),
-      );
+      // Authorized call via shared api (AuthInterceptor adds Bearer)
+      final res = await api.get('/api/admin/events');
+
       if (res.statusCode == 200) {
         final data = res.data;
         final list = (data is Map && data['data'] is List)
@@ -70,21 +63,19 @@ class _EventListPageState extends State<EventListPage> {
   }
 
   void _openCreate() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const EventFormPage()),
-    ).then((_) => _fetch());
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const EventFormPage()))
+        .then((_) => _fetch());
   }
 
   void _openEdit(int id) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => EventFormPage(eventId: id)),
-    ).then((_) => _fetch());
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => EventFormPage(eventId: id)))
+        .then((_) => _fetch());
   }
 
   void _openView(int id) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => EventViewPage(id: id)),
-    );
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => EventViewPage(id: id)));
   }
 
   @override
@@ -109,16 +100,20 @@ class _EventListPageState extends State<EventListPage> {
                           children: [
                             if (it['description'] != null) Text(it['description'].toString()),
                             if (it['eventDate'] != null) Text(it['eventDate'].toString()),
-                            if (it['buildingNumber'] != null) Text('Building: ${it['buildingNumber']}'),
+                            if (it['buildingNumber'] != null)
+                              Text('Building: ${it['buildingNumber']}'),
                           ],
                         ),
-                        onTap: id == null ? null : () => _openView(int.tryParse(id.toString()) ?? 0),
+                        onTap: id == null
+                            ? null
+                            : () => _openView(int.tryParse(id.toString()) ?? 0),
                         trailing: id == null
                             ? null
                             : IconButton(
                                 tooltip: 'Edit',
                                 icon: const Icon(Icons.edit),
-                                onPressed: () => _openEdit(int.tryParse(id.toString()) ?? 0),
+                                onPressed: () =>
+                                    _openEdit(int.tryParse(id.toString()) ?? 0),
                               ),
                       );
                     },
@@ -135,7 +130,10 @@ class _EventListPageState extends State<EventListPage> {
           ),
         ],
       ),
-      body: RefreshIndicator(onRefresh: _fetch, child: body is ScrollView ? body : ListView(children: [body])),
+      body: RefreshIndicator(
+        onRefresh: _fetch,
+        child: body is ScrollView ? body : ListView(children: [body]),
+      ),
     );
   }
 }

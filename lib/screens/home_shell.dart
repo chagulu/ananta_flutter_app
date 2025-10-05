@@ -22,6 +22,9 @@ import 'admin/residence_register_page.dart'; // create resident for admin
 import '../screens/dashboard.dart' as dyn;            // resident/guard dynamic dashboard
 import '../screens/admin/admin_dashboard.dart' as adyn; // admin-only dynamic dashboard
 import 'admin/event_form_page.dart';
+import '../screens/residence_list_page.dart';
+import 'admin/event_list_page.dart';
+import 'admin/event_form_page.dart';
 
 
 const String baseUrl = AppConfig.baseUrl;
@@ -291,26 +294,48 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
   }
 
   void _onMenuSelected(String value) async {
-    switch (value) {
-      case 'profile':
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile coming soon')));
-        break;
-      case 'settings':
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings coming soon')));
-        break;
-        case 'events':
-        if (_resolvedRole == 'ROLE_ADMIN') {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const EventFormPage()),
-          );
-        }
-        break;
+  switch (value) {
+    case 'profile':
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Profile coming soon')));
+      break;
 
-      case 'logout':
-        _redirectToLogin();
-        break;
-    }
+    case 'settings':
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Settings coming soon')));
+      break;
+
+    case 'events': // create
+      if (_resolvedRole == 'ROLE_ADMIN') {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const EventFormPage()),
+        );
+      } else {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Admins only')));
+      }
+      break;
+
+    case 'event_list': // list
+      if (_resolvedRole == 'ROLE_ADMIN') {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const EventListPage()),
+        );
+      } else {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Admins only')));
+      }
+      break;
+
+    case 'logout':
+      _redirectToLogin();
+      break;
+
+    default:
+      break;
   }
+}
+
 
   Future<void> _setupFCM() async {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -464,12 +489,16 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
                   const PopupMenuItem(value: 'settings', child: Text('Settings')),
                 ];
                 if (_resolvedRole == 'ROLE_ADMIN') {
-                  items.add(const PopupMenuItem(value: 'events', child: Text('Events'))); // before logout
+                  items.addAll(const [
+                    PopupMenuItem(value: 'events', child: Text('Create event')), // existing create
+                    PopupMenuItem(value: 'event_list', child: Text('Event list')), // new list
+                  ]);
                 }
                 items.add(const PopupMenuItem(value: 'logout', child: Text('Logout')));
                 return items;
               },
             ),
+
 
             const SizedBox(width: 4),
           ],

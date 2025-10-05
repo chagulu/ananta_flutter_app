@@ -102,20 +102,20 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
         // Persist resident unit for downstream pages
         final roleStr = (_roleFromStorage ?? '').toUpperCase();
-final isResident = roleStr.contains('RESIDENT') || roleStr.contains('RESIDENCE');
-if (isResident) {
-  final data = (map['data'] is Map) ? map['data'] as Map : <String, dynamic>{};
-  final building = data['buildingNumber']?.toString();
-  final flat = data['flatNumber']?.toString();
-  if (building != null && building.isNotEmpty) {
-    await _secure.write(key: 'resident_building_number', value: building);
-    debugPrint('Dashboard: stored building=$building');
-  }
-  if (flat != null && flat.isNotEmpty) {
-    await _secure.write(key: 'resident_flat_number', value: flat);
-    debugPrint('Dashboard: stored flat=$flat');
-  }
-}
+        final isResident = roleStr.contains('RESIDENT') || roleStr.contains('RESIDENCE');
+        if (isResident) {
+          final data = (map['data'] is Map) ? map['data'] as Map : <String, dynamic>{};
+          final building = data['buildingNumber']?.toString();
+          final flat = data['flatNumber']?.toString();
+          if (building != null && building.isNotEmpty) {
+            await _secure.write(key: 'resident_building_number', value: building);
+            debugPrint('Dashboard: stored building=$building');
+          }
+          if (flat != null && flat.isNotEmpty) {
+            await _secure.write(key: 'resident_flat_number', value: flat);
+            debugPrint('Dashboard: stored flat=$flat');
+          }
+        }
       } else {
         throw Exception('Failed to load dashboard (${res.statusCode})');
       }

@@ -21,6 +21,8 @@ import 'admin/residence_register_page.dart'; // create resident for admin
 // Use distinct aliases
 import '../screens/dashboard.dart' as dyn;            // resident/guard dynamic dashboard
 import '../screens/admin/admin_dashboard.dart' as adyn; // admin-only dynamic dashboard
+import 'admin/event_form_page.dart';
+
 
 const String baseUrl = AppConfig.baseUrl;
 final _secure = FlutterSecureStorage();
@@ -296,6 +298,14 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
       case 'settings':
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings coming soon')));
         break;
+        case 'events':
+        if (_resolvedRole == 'ROLE_ADMIN') {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const EventFormPage()),
+          );
+        }
+        break;
+
       case 'logout':
         _redirectToLogin();
         break;
@@ -448,12 +458,19 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
             PopupMenuButton<String>(
               tooltip: 'Menu',
               onSelected: _onMenuSelected,
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'profile', child: Text('Profile')),
-                PopupMenuItem(value: 'settings', child: Text('Settings')),
-                PopupMenuItem(value: 'logout', child: Text('Logout')),
-              ],
+              itemBuilder: (_) {
+                final items = <PopupMenuEntry<String>>[
+                  const PopupMenuItem(value: 'profile', child: Text('Profile')),
+                  const PopupMenuItem(value: 'settings', child: Text('Settings')),
+                ];
+                if (_resolvedRole == 'ROLE_ADMIN') {
+                  items.add(const PopupMenuItem(value: 'events', child: Text('Events'))); // before logout
+                }
+                items.add(const PopupMenuItem(value: 'logout', child: Text('Logout')));
+                return items;
+              },
             ),
+
             const SizedBox(width: 4),
           ],
         ),

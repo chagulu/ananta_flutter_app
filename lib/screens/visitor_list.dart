@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config.dart';
 import '../models/login_type.dart';
 import 'home_shell.dart'; // api and baseUrl
@@ -24,6 +25,11 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
   String? _error;
   final List<Map<String, dynamic>> _items = [];
   Timer? _pollingTimer;
+
+  // Storage for residence unit
+  final _secure = const FlutterSecureStorage();
+  String? _residentBuildingFromStorage;
+  String? _residentFlatFromStorage;
 
   // Filter states
   final TextEditingController _guestNameController = TextEditingController();
@@ -50,12 +56,26 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
       ? '/api/visitor/guard'
       : '/api/visitor';
 
+  bool get _isResidence => widget.loginType == LoginType.residence;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _fetch(reset: true);
-    _startPolling();
+    _loadResidenceUnitFromStorage().then((_) {
+      _fetch(reset: true);
+      _startPolling();
+    });
+  }
+
+  Future<void> _loadResidenceUnitFromStorage() async {
+    if (_isResidence) {
+      _residentBuildingFromStorage =
+          await _secure.read(key: 'resident_building_number');
+      _residentFlatFromStorage =
+          await _secure.read(key: 'resident_flat_number');
+      debugPrint('VisitorList residence storage: bldg=$_residentBuildingFromStorage flat=$_residentFlatFromStorage'); // [info]
+    }
   }
 
   @override
@@ -95,17 +115,19 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
     setState(() => _loading = true);
 
     try {
-      // Paired validation: if one is selected, require the other
-      final invalidPair = (_selectedFlat != null && _selectedBuilding == null) ||
-                          (_selectedFlat == null && _selectedBuilding != null);
-      if (invalidPair) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Both Flat and Building must be selected together')),
-          );
+      // Paired validation: if one is selected, require the other (only for non-residents)
+      if (!_isResidence) {
+        final invalidPair = (_selectedFlat != null && _selectedBuilding == null) ||
+                            (_selectedFlat == null && _selectedBuilding != null);
+        if (invalidPair) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Both Flat and Building must be selected together')),
+            );
+          }
+          if (mounted) setState(() => _loading = false);
+          return;
         }
-        if (mounted) setState(() => _loading = false);
-        return;
       }
 
       // Query parameters
@@ -117,12 +139,24 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
       final mobile = _mobileController.text.trim();
       if (name.isNotEmpty) qp['guestName'] = name;
       if (mobile.isNotEmpty) qp['mobile'] = mobile;
-      if (_selectedFlat != null && _selectedFlat!.isNotEmpty) {
-        qp['flatNumber'] = _selectedFlat!;
+
+      // Inject residence unit from storage; fall back to UI for guard/admin
+      if (_isResidence) {
+        if ((_residentFlatFromStorage ?? '').isNotEmpty) {
+          qp['flatNumber'] = _residentFlatFromStorage!;
+        }
+        if ((_residentBuildingFromStorage ?? '').isNotEmpty) {
+          qp['buildingNumber'] = _residentBuildingFromStorage!;
+        }
+      } else {
+        if (_selectedFlat != null && _selectedFlat!.isNotEmpty) {
+          qp['flatNumber'] = _selectedFlat!;
+        }
+        if (_selectedBuilding != null && _selectedBuilding!.isNotEmpty) {
+          qp['buildingNumber'] = _selectedBuilding!;
+        }
       }
-      if (_selectedBuilding != null && _selectedBuilding!.isNotEmpty) {
-        qp['buildingNumber'] = _selectedBuilding!;
-      }
+
       if (_selectedStatus != null && _selectedStatus!.isNotEmpty) {
         qp['approveStatus'] = _selectedStatus!;
       }
@@ -430,7 +464,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
                   ),
                   const SizedBox(width: 4),
-                  if (isPending && widget.loginType == LoginType.residence) ...[
+                  if (isPending && _isResidence) ...[
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.green,
@@ -446,10 +480,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                      ),
+                        foregroundColor: Colors.white),
                       onPressed: id == 0 ? null : () => _visitorAction(id, 'reject'),
                       icon: const Icon(Icons.cancel_outlined, size: 14),
                       label: const Text('Reject', style: TextStyle(fontSize: 10)),
@@ -467,8 +498,7 @@ class _VisitorListPageState extends State<VisitorListPage> with WidgetsBindingOb
           onPressed: id == 0
               ? null
               : () async {
-                  final link =
-                      '${AppConfig.baseUrl}/api/visitor/$id/action?action=approve';
+                  final link = '${AppConfig.baseUrl}/api/visitor/$id/action?action=approve';
                   await Clipboard.setData(ClipboardData(text: link));
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(

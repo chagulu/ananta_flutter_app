@@ -1,3 +1,4 @@
+// File: lib/screens/dashboard.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
@@ -95,11 +96,26 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
       if (res.statusCode == 200) {
         final d = res.data;
-        if (d is Map<String, dynamic>) {
-          setState(() => _response = d);
-        } else {
-          setState(() => _response = {'data': {}, 'role': _roleFromStorage ?? 'UNKNOWN'});
-        }
+        // Normalize to a map and store
+        final map = (d is Map<String, dynamic>) ? d : <String, dynamic>{};
+        setState(() => _response = map);
+
+        // Persist resident unit for downstream pages
+        final roleStr = (_roleFromStorage ?? '').toUpperCase();
+final isResident = roleStr.contains('RESIDENT') || roleStr.contains('RESIDENCE');
+if (isResident) {
+  final data = (map['data'] is Map) ? map['data'] as Map : <String, dynamic>{};
+  final building = data['buildingNumber']?.toString();
+  final flat = data['flatNumber']?.toString();
+  if (building != null && building.isNotEmpty) {
+    await _secure.write(key: 'resident_building_number', value: building);
+    debugPrint('Dashboard: stored building=$building');
+  }
+  if (flat != null && flat.isNotEmpty) {
+    await _secure.write(key: 'resident_flat_number', value: flat);
+    debugPrint('Dashboard: stored flat=$flat');
+  }
+}
       } else {
         throw Exception('Failed to load dashboard (${res.statusCode})');
       }

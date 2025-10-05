@@ -1,17 +1,13 @@
+// File: lib/screens/send_otp_page.dart
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:ananta_app/screens/verify_otp_page.dart';
-import 'package:ananta_app/screens/home_shell.dart'; // <-- add this
+import 'package:ananta_app/screens/home_shell.dart';
 import '../config.dart';
 import '../models/login_type.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-
-
-
-// inside your _SendOtpPageState
 final FlutterSecureStorage _secure = const FlutterSecureStorage();
-
 
 class SendOtpPage extends StatefulWidget {
   const SendOtpPage({super.key});
@@ -111,65 +107,59 @@ class _SendOtpPageState extends State<SendOtpPage> {
   }
 
   Future<void> _adminLogin() async {
-  final username = _usernameCtrl.text.trim();
-  final password = _passwordCtrl.text;
+    final username = _usernameCtrl.text.trim();
+    final password = _passwordCtrl.text;
 
-  if (username.isEmpty || password.isEmpty) {
-    setState(() {
-      _banner = "Username and password are required";
-      _isError = true;
-    });
-    return;
-  }
-
-  setState(() {
-    _submitting = true;
-    _banner = null;
-    _isError = false;
-  });
-
-  try {
-    final payload = {
-      "username": username,
-      "password": password,
-    };
-    final res = await _dio.post('/api/admin/login', data: payload);
-    final data = res.data as Map;
-    if (data['success'] == true) {
-      // ✅ Store token and role
-      final token = data['data']['token'] ?? '';
-      await _secure.write(key: 'access_token', value: token);
-      await _secure.write(key: 'user_role', value: 'ROLE_ADMIN');
-      await _secure.write(key: 'login_type', value: 'admin');
-
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => const HomeShell(
-              loginType: LoginType.admin,
-              role: "ROLE_ADMIN",
-            ),
-          ),
-        );
-
-      }
-    } else {
+    if (username.isEmpty || password.isEmpty) {
       setState(() {
-        _banner = data['message'] ?? 'Login failed';
+        _banner = "Username and password are required";
         _isError = true;
       });
+      return;
     }
-  } on DioException catch (e) {
-    final msg = e.response?.data?['message'] ?? e.message ?? 'Login failed';
-    setState(() {
-      _banner = msg;
-      _isError = true;
-    });
-  } finally {
-    if (mounted) setState(() => _submitting = false);
-  }
-}
 
+    setState(() {
+      _submitting = true;
+      _banner = null;
+      _isError = false;
+    });
+
+    try {
+      final payload = {"username": username, "password": password};
+      final res = await _dio.post('/api/admin/login', data: payload);
+      final data = res.data as Map;
+      if (data['success'] == true) {
+        final token = data['data']['token'] ?? '';
+        await _secure.write(key: 'access_token', value: token);
+        await _secure.write(key: 'user_role', value: 'ROLE_ADMIN');
+        await _secure.write(key: 'login_type', value: 'admin');
+
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => const HomeShell(
+                loginType: LoginType.admin,
+                role: "ROLE_ADMIN",
+              ),
+            ),
+          );
+        }
+      } else {
+        setState(() {
+          _banner = data['message'] ?? 'Login failed';
+          _isError = true;
+        });
+      }
+    } on DioException catch (e) {
+      final msg = e.response?.data?['message'] ?? e.message ?? 'Login failed';
+      setState(() {
+        _banner = msg;
+        _isError = true;
+      });
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -177,25 +167,77 @@ class _SendOtpPageState extends State<SendOtpPage> {
 
     return Scaffold(
       backgroundColor: scheme.surface,
-      appBar: AppBar(
-        title: const Text('Login'),
-        backgroundColor: scheme.surface,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(64),
+        child: AppBar(
+          centerTitle: true,
+          flexibleSpace: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [scheme.primary.withOpacity(0.90), scheme.tertiary.withOpacity(0.90)],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
+            ),
+          ),
+          title: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Ananta Residency',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: scheme.onPrimary,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.4,
+                    ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Login',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: scheme.onPrimary.withOpacity(0.95),
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+        ),
       ),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
+          constraints: const BoxConstraints(maxWidth: 520),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 24),
+                // Header above logo
+                Text(
+                  'Welcome to Ananta Residency',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: scheme.onSurface,
+                      ),
+                ),
+                const SizedBox(height: 16),
+                // Logo
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHighest.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: scheme.outlineVariant),
+                  ),
                   child: Image.asset(
                     'assets/logo.png',
-                    height: 100,
+                    height: 84,
+                    fit: BoxFit.contain,
                   ),
                 ),
+                const SizedBox(height: 16),
 
                 SegmentedButton<LoginType>(
                   segments: const [
@@ -206,22 +248,22 @@ class _SendOtpPageState extends State<SendOtpPage> {
                   selected: <LoginType>{_type},
                   onSelectionChanged: (s) => setState(() => _type = s.first),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 Text(
                   _type == LoginType.guard
                       ? 'Send OTP to user'
                       : _type == LoginType.residence
                           ? 'Send OTP to residence'
                           : 'Admin login',
-                  style: Theme.of(context).textTheme.titleMedium,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
 
                 if (_banner != null)
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    margin: const EdgeInsets.only(bottom: 16),
+                    margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
                       color: _isError ? scheme.errorContainer : scheme.primaryContainer,
                       borderRadius: BorderRadius.circular(12),
@@ -268,8 +310,7 @@ class _SendOtpPageState extends State<SendOtpPage> {
                                 controller: _usernameCtrl,
                                 decoration: InputDecoration(
                                   labelText: 'Username',
-                                  prefixIcon:
-                                      Icon(Icons.person_outline, color: scheme.onSurfaceVariant),
+                                  prefixIcon: Icon(Icons.person_outline, color: scheme.onSurfaceVariant),
                                 ),
                               ),
                               const SizedBox(height: 16),
@@ -278,8 +319,7 @@ class _SendOtpPageState extends State<SendOtpPage> {
                                 obscureText: true,
                                 decoration: InputDecoration(
                                   labelText: 'Password',
-                                  prefixIcon:
-                                      Icon(Icons.lock_outline, color: scheme.onSurfaceVariant),
+                                  prefixIcon: Icon(Icons.lock_outline, color: scheme.onSurfaceVariant),
                                 ),
                               ),
                               const SizedBox(height: 16),
@@ -335,8 +375,7 @@ class _SendOtpPageState extends State<SendOtpPage> {
                                   textInputAction: TextInputAction.done,
                                   maxLength: 10,
                                   decoration: InputDecoration(
-                                    prefixIcon: Icon(Icons.phone_outlined,
-                                        color: scheme.onSurfaceVariant),
+                                    prefixIcon: Icon(Icons.phone_outlined, color: scheme.onSurfaceVariant),
                                     hintText: 'Enter 10-digit mobile number',
                                     counterText: '',
                                     filled: true,
@@ -390,9 +429,7 @@ class _SendOtpPageState extends State<SendOtpPage> {
 
                 const SizedBox(height: 16),
                 Text(
-                  _type == LoginType.admin
-                      ? 'Admin endpoint: /api/admin/login'
-                      : 'User endpoint: $_sendPath',
+                  _type == LoginType.admin ? 'Admin endpoint: /api/admin/login' : 'User endpoint: $_sendPath',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],

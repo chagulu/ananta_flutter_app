@@ -1,3 +1,4 @@
+// File: lib/screens/verify_otp_page.dart
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -10,7 +11,7 @@ import '../models/login_type.dart';
 class VerifyOtpPage extends StatefulWidget {
   final String mobileNo;
   final String baseUrl;
-  final String verifyPath; // '/auth/verify-otp' or '/residence/auth/verify-otp'
+  final String verifyPath; // '/guard/auth/verify-otp' or '/residence/auth/verify-otp'
   final LoginType loginType;
   const VerifyOtpPage({
     super.key,
@@ -93,31 +94,24 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
       final role = (data['role'] ?? 'ROLE_RESIDENCE').toString();
 
       if (success && token.isNotEmpty) {
-        // 🔐 Save token, role, loginType
         await _secure.write(key: 'access_token', value: token);
         await _secure.write(key: 'user_role', value: role);
         await _secure.write(key: 'login_type', value: widget.loginType.name);
 
-        // ✅ Register FCM token
+        // Register FCM token (best-effort)
         try {
           final fcmToken = await FirebaseMessaging.instance.getToken();
           if (fcmToken != null) {
             await _dio.post(
               '/api/notifications/register-token',
-              data: {
-                'mobileNo': widget.mobileNo,
-                'fcmToken': fcmToken,
-              },
+              data: {'mobileNo': widget.mobileNo, 'fcmToken': fcmToken},
               options: Options(headers: {
                 'Authorization': 'Bearer $token',
                 'Content-Type': 'application/json',
               }),
             );
-            debugPrint('✅ FCM token registered successfully');
           }
-        } catch (e) {
-          debugPrint('❌ Failed to register FCM token: $e');
-        }
+        } catch (_) {}
 
         if (!mounted) return;
         Navigator.of(context).pushAndRemoveUntil(
@@ -234,10 +228,43 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
       onWillPop: () async => false,
       child: Scaffold(
         backgroundColor: cs.surface,
-        appBar: AppBar(
-          backgroundColor: cs.surface,
-          centerTitle: true,
-          title: Image.asset('assets/logo.png', height: 28, fit: BoxFit.contain),
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(64),
+          child: AppBar(
+            centerTitle: true,
+            flexibleSpace: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [cs.primary.withOpacity(0.90), cs.tertiary.withOpacity(0.90)],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+              ),
+            ),
+            title: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Ananta Residency',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: cs.onPrimary,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.4,
+                      ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Verify OTP',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: cs.onPrimary.withOpacity(0.95),
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+          ),
         ),
         body: Center(
           child: ConstrainedBox(
@@ -246,6 +273,18 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
               padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
               child: Column(
                 children: [
+                  // Framed logo for brand continuity
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: cs.outlineVariant),
+                    ),
+                    child: Image.asset('assets/logo.png', height: 74, fit: BoxFit.contain),
+                  ),
+                  const SizedBox(height: 16),
+
                   ClipRRect(
                     borderRadius: BorderRadius.circular(20),
                     child: BackdropFilter(
@@ -281,6 +320,7 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
+
                   if (_banner != null)
                     Container(
                       width: double.infinity,
@@ -310,6 +350,7 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
                         ],
                       ),
                     ),
+
                   Form(
                     key: _formKey,
                     child: Stack(
@@ -345,6 +386,7 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
+
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -364,13 +406,17 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
                     ],
                   ),
                   const SizedBox(height: 16),
+
                   SizedBox(
                     width: double.infinity,
                     height: 48,
                     child: FilledButton.icon(
                       icon: _submitting
                           ? const SizedBox(
-                              height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
                           : const Icon(Icons.verified),
                       label: Text(_submitting ? 'Verifying...' : 'Verify OTP'),
                       onPressed: _submitting ? null : _verifyOtp,
